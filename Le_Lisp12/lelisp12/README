@@ -1,0 +1,31 @@
+This tar file contains the source of Le_Lisp version 12, aka LeLisp 80,
+as it was distributed, at the end of July 1983, in high-schools by
+the French Ministry of Education.
+
+The system ran on a lot of different 8080 or Z80 based architectures,
+with a 16k byte footprint, specifically on:
+
+  1  - MDS80 (32K ou 64K)
+  2  - MOSTEK 80
+  3  - TRS80 model I level II
+  4  - SDK80
+  5  - SORCERER
+  6  - IMSAI 8080
+  7  - TRS model II
+  8  - Heathkit 89
+  9  - Machine Leblanc
+  10 - Micral 80 22 G
+  11 - SILZ (eleanor)
+  12 - LOGABAX
+  13 - Micral 90
+
+
+- src: the complete source of the system at the end of July 1983,
+  as described in the reference manual:
+  http://www.inria.fr/rrrt/rt-0027.html
+
+- llib: the LeLisp 80 standard library including the screen editor, PEPE.
+
+- logo: a LeLisp 80 version of the programming language LOGO, developed
+  by Isabelle Borne for the French Ministry of Education.
+ 

@@ -1,0 +1,36 @@
+
+*	Test des nouvelles macros
+
+*	Macro FOO
+
+FOO	MACRO
+	movl	r1,r2
+	ENDM
+
+*	Macro MOV
+
+MOV	MACRO
+	movl	\1,\2
+	ENDM
+
+*	Macro FOO1
+
+FOO1	MACRO
+	movl	#\1,r10
+	bjr	\@
+	movl	\2,\3
+\@	nop
+	ENDM
+
+*	Macro	RE
+
+RE	FOO
+	MOV	A1,A2
+	MOV	#$100,A4
+	MOV	'Foo',A5
+	MOV	<'Bar Foo'>,A6
+
+	FOO1	$1FF,RE,R10
+
+	END
+

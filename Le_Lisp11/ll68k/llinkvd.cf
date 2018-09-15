@@ -1,0 +1,36 @@
+=/*************************************************************
+=/*
+=/*	Edition de liens du	systeme Le_Lisp 68K
+=/*	pour le systeme VERSAdos
+=/*
+=/*************************************************************
+=time
+=link ,EXLL.LELISP.LO,EXLL.LELISP.MP;AMZ=90
+SEGMENT PURE(RLG):8,9,10
+SEGMENT DATA():14,15
+ATTRIBUTES
+INPUT LELISP
+LISTU
+INPUT LLVSDOS
+LISTU
+INPUT LLINIT
+INPUT TOPERR
+INPUT GC
+INPUT PHYSIO
+INPUT READ
+INPUT PRINT
+INPUT EVAL
+INPUT CARCDR
+INPUT CNTRL
+INPUT FNTSD
+INPUT NBSTRS
+INPUT BLLSHT
+LISTU
+LIBRARY BIBLL.BIBLL.RO
+LISTU
+LIBRARY LIB.LIBRARY.RO
+LISTU
+END
+=time
+=use :.exll
+

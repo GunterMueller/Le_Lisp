@@ -1,0 +1,35 @@
+=/*************************************************************
+=/*
+=/*	link + build   du systeme  :	Le_Lisp 68K VERSAmodule
+=/*
+=/*************************************************************
+=time
+=link ,LELISPVM.LO,LELISPVM.MP;AMZ=90
+=/* $20000 si ROM pure
+SEGMENT PURE(RLG):8,9,10,11 $20000
+=/* $40000 si ROM pure
+SEGMENT DATA():14,15,2 $48000
+ATTRIBUTES
+INPUT LL68KVM
+INPUT RTLLM3
+INPUT LLINIT
+INPUT TOPERR
+INPUT GC
+INPUT PHYSIO
+INPUT READ
+INPUT PRINT
+INPUT EVAL
+INPUT CARCDR
+INPUT CNTRL
+INPUT FNTSTD
+INPUT NBSTRS
+INPUT BLLSHT
+LISTU
+LIBRARY BIBLL.BIBLL.RO
+LIBRARY LIB.LIBRARY.RO
+LISTU
+END
+=time
+=builds lelispvm.lo,lelisp.mx
+=time
+

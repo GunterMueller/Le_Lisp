@@ -1,0 +1,779 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :  les fonctions standard (1ere partie)
+*
+****************************************************************
+*
+*                Jerome CHAILLOUX  (Chailloux.Vlsi)
+*                           I.N.R.I.A.
+*                Domaine de Voluceau,  Rocquencourt
+*                B.P. 105,   78153 Le Chesnay Cedex
+*                tel : (1) 954 90 20      poste 456
+*
+*****************************************************************
+ 
+ 
+ 
+          TITRE     FNTSD       LLM3 : les fonctions standard.
+ 
+          PURE
+ 
+          XREF      BUILDAT,CSYMB                 pour MAKFNT
+          XREF      MSTACK,ERRFS                  pour CHKSTK
+          XREF      GC                            pour CONS
+          XREF      HASHMAX,HASHTAB               le hachage des symboles
+ 
+          XREF      ERRNAA,ERRNNA,ERRNLA,ERRNVA
+          XREF      EVALCAR,EVALA1,PROGNA3,SAVEP,PROGN,APPLY
+          XREF      .UNDEF,.T,.VOID,.QUOTE,.INTERNAL
+          XREF      LOC                                     for FVAL
+ 
+          XDEF      INI_STD
+          XDEF      TRUE,FALSE                              for everybody
+          XDEF      MEMBER                                  for CNTRL
+          XDEF      .FCONS,.MCONS,.ATOM
+ 
+*
+*         Creation des symboles
+*         =====================
+*
+ 
+INI_STD   EQU       *
+          NOLIST
+ 
+          MAKFNT    FCVAL,0,.VOID,4,'CVAL'
+          MAKFNT    MAKUNBOUND,0,.VOID,10,'MAKUNBOUND'
+          MAKFNT    FPLIST,0,.VOID,5,'PLIST'
+          MAKFNT    SETPLIST,0,.VOID,8,'SETPLIST'
+          MAKFNT    FFVAL,0,.VOID,4,'FVAL'
+          MAKFNT    FFTYPE,0,.VOID,5,'FTYPE'
+          MAKFNT    MAKUNFN,0,.VOID,12,'MAKUNBOUNDFN'
+          MAKFNT    FINDFN,0,.VOID,6,'FINDFN'
+          MAKFNT    SYNONYM,0,.VOID,7,'SYNONYM'
+          MAKFNT    TRUE,0,.VOID,4,'TRUE'
+          MAKFNT    FALSE,0,.VOID,5,'FALSE'
+          MAKFNT    NOT,0,.VOID,3,'NOT'
+          MAKFNT    NULL,0,.VOID,4,'NULL'
+          MAKFNT    ATOM,0,.VOID,4,'ATOM'
+          MAKFNT    SYMBOLP,0,.VOID,7,'SYMBOLP'
+          MAKFNT    NUMBERP,0,.VOID,7,'NUMBERP'
+          MAKFNT    STRINGP,0,.VOID,7,'STRINGP'
+          MAKFNT    LISTP,0,.VOID,5,'LISTP'
+          MAKFNT    CONSP,0,.VOID,5,'CONSP'
+          MAKFNT    BOUNDP,0,.VOID,6,'BOUNDP'
+          MAKFNT    EQ,0,.VOID,2,'EQ'
+          MAKFNT    NEQ,0,.VOID,3,'NEQ'
+          MAKFNT    EQUAL,0,.VOID,5,'EQUAL'
+          MAKFNT    NEQUAL,0,.VOID,6,'NEQUAL'
+          MAKFNT    MEMQ,0,.VOID,4,'MEMQ'
+          MAKFNT    MEMBER,0,.VOID,6,'MEMBER'
+          MAKFNT    LAST,0,.VOID,4,'LAST'
+          MAKFNT    NTHCDR,0,.VOID,6,'NTHCDR'
+          MAKFNT    NTH,0,.VOID,3,'NTH'
+          MAKFNT    LENGTH,0,.VOID,6,'LENGTH'
+          MAKFNT    FCONS,0,.VOID,4,'CONS'
+          MAKFNT    FXCONS,0,.VOID,5,'XCONS'
+          MAKFNT    FNCONS,0,.VOID,5,'NCONS'
+          MAKFNT    MCONS,0,.VOID,5,'MCONS'
+          MAKFNT    KWOTE,0,.VOID,5,'KWOTE'
+          MAKFNT    MAKELIST,0,.VOID,8,'MAKELIST'
+          MAKFNT    REVERSE,0,.VOID,7,'REVERSE'
+          MAKFNT    APPEND,0,.VOID,6,'APPEND'
+          MAKFNT    APPND1,0,.VOID,7,'APPEND1'
+          MAKFNT    REMQ,0,.VOID,4,'REMQ'
+          MAKFNT    REMOVE,0,.VOID,6,'REMOVE'
+          MAKFNT    COPY,0,.VOID,4,'COPY'
+          MAKFNT    SUBSTITUTE,0,.VOID,5,'SUBST'
+          MAKFNT    OBLIST,0,.VOID,6,'OBLIST'
+          MAKFNT    RPLACA,0,.VOID,6,'RPLACA'
+          MAKFNT    RPLACD,0,.VOID,6,'RPLACD'
+          MAKFNT    RPLAC,0,.VOID,5,'RPLAC'
+          MAKFNT    PLACDL,0,.VOID,6,'PLACDL'
+          MAKFNT    DISPLACE,0,.VOID,8,'DISPLACE'
+          MAKFNT    SETQ,0,.VOID,4,'SETQ'
+          MAKFNT    FSET,0,.VOID,3,'SET'
+          MAKFNT    SETQQ,0,.VOID,5,'SETQQ'
+          MAKFNT    PSETQ,0,.VOID,5,'PSETQ'
+          MAKFNT    NREVERSE,0,.VOID,8,'NREVERSE'
+          MAKFNT    NRECONC,0,.VOID,7,'NRECONC'
+          MAKFNT    NEXTL,0,.VOID,5,'NEXTL'
+          MAKFNT    NEWL,0,.VOID,4,'NEWL'
+          MAKFNT    NCONC,0,.VOID,5,'NCONC'
+          MAKFNT    NCONC1,0,.VOID,6,'NCONC1'
+          MAKFNT    GET,0,.VOID,3,'GET'
+          MAKFNT    GETPROP,0,.VOID,7,'GETPROP'
+          MAKFNT    GETL,0,.VOID,4,'GETL'
+          MAKFNT    ADDPROP,0,.VOID,7,'ADDPROP'
+          MAKFNT    PUTPROP,0,.VOID,7,'PUTPROP'
+          MAKFNT    DEFPROP,0,.VOID,7,'DEFPROP'
+          MAKFNT    REMPROP,0,.VOID,7,'REMPROP'
+          MAKFNT    ACONS,0,.VOID,5,'ACONS'
+          MAKFNT    ASSQ,0,.VOID,4,'ASSQ'
+          MAKFNT    CASSQ,0,.VOID,5,'CASSQ'
+          MAKFNT    ASSOC,0,.VOID,5,'ASSOC'
+          MAKFNT    CASSOC,0,.VOID,6,'CASSOC'
+ 
+POPJ      RETURN
+ 
+ 
+*
+*         Fonctions d'acces aux attributs des symboles
+*         ============================================
+*
+*         Acces aux attributs : CVAL PLIST FVAL FTYPE
+*
+ 
+*----------------------------------------
+          FENTRY    FCVAL,SUBR1
+*----------------------------------------
+          BFSYMB.S  A1,CVALERR          il faut un symbole
+          MOV       CVAL(A1),A1         ramene la CVAL courante
+          RETURN
+CVALERR   MOV       .FCVAL,A2           le nom de la fonction
+          BRA       ERRNAA              argument non symbolique
+ 
+ 
+*----------------------------------------
+          FENTRY    MAKUNBOUND,SUBR1
+*----------------------------------------
+          BFSYMB.S  A1,MAKUERR          il faut un symbole
+          BTNIL.S   A1,MAKUERR          on ne touche pas a NIL!
+          MOV       .UNDEF,CVAL(A1)     et voila!
+          RETURN
+MAKUERR   MOV       .MAKUNBOUND,A2      le nom de la fonction
+          BRA       ERRNAA              il fallait un symbole
+ 
+ 
+*----------------------------------------
+          FENTRY    FPLIST,SUBR1
+*----------------------------------------
+          BFSYMB.S  A1,PLISTERR         il faut un symbole
+          MOV       PLIST(A1),A1        ramene la PLIST courante
+          RETURN
+PLISTERR  MOV       .FPLIST,A2          le nom de la fonction
+          BRA       ERRNAA              argument non symbolique
+ 
+ 
+*----------------------------------------
+          FENTRY    SETPLIST,SUBR2
+*----------------------------------------
+          BFSYMB.S  A1,SLISTERR         il faut un symbole
+          BTNIL.S   A1,SLISTERR         on ne touche pas a NIL!
+          MOV       A2,PLIST(A1)        on change la PLIST
+          MOV       A2,A1               et on retourne la nouvelle plist
+          RETURN                        voila
+SLISTERR  MOV       .SETPLIST,A2        le nom de la fonction
+          BRA       ERRNAA              argument non symbolique
+ 
+ 
+*----------------------------------------
+          FENTRY    FFVAL,SUBRV2
+*----------------------------------------
+          BFSYMB.S  A1,FVALERR          il faut un symbole
+          BTNIL.S   A2,FVAL1            pas de 2eme arg
+          MOV       A2,FVAL(A1)         set la FVAL
+FVAL1     MOV       FVAL(A1),A1         get la FVAL
+          BFNUMB    A1,POPJ             en cas de (h . l)!
+          BRA       LOC
+FVALERR   MOV       .FFVAL,A2           nom de la fonction
+          BRA       ERRNAA              argument non symbolique
+ 
+ 
+*----------------------------------------
+          FENTRY    FFTYPE,SUBRV2
+*----------------------------------------
+          BFSYMB.S  A1,FTYPEERR         il faut un symbole
+          BTNIL.S   A2,FTYP1            pas de 2eme arg
+          SFTYPE    A2,A1               set le FTYPE
+FTYP1     GFTYPE    A1,A1               get le FTYPE
+          RETURN                        et voila
+FTYPEERR  MOV       .FFTYPE,A2          nom de la fonction
+          BRA       ERRNAA              argument non symbolique
+ 
+ 
+*----------------------------------------
+          FENTRY    MAKUNFN,SUBR1
+*----------------------------------------
+          BFSYMB.S  A1,MAKUNFNER        il faut un symbole
+          MOV       #0,FVAL(A1)         nettoie la FVAL et
+          SFTYPE    #0,A1               le FTYPE
+          RETURN    *
+MAKUNFNER MOV       .MAKUNFN,A2         nom de la fonction
+          BRA       ERRNNA              erreur argument non symbolique
+ 
+ 
+*
+*         (FINDFN <s>)  retourne le symbole dont la FVAL egale <s>
+*
+ 
+*----------------------------------------
+          FENTRY    FINDFN,SUBR1
+*----------------------------------------
+          MOV       A1,A2               prepare le retour
+          MOV       HASHMAX,A4          taille de la table de hachage
+FINDFN0   XMOV      A4,HASHTAB,A1       le bucket de numero A4
+          BRA.S     FINDFN4             direct sur le test
+FINDFN1   MOV       FVAL(A1),A3         pour le test
+          BTEQ      A2,A3,FINDFN9       c'est ok
+          MOV       ALINK(A1),A1        avance dans la liste des symboles
+FINDFN4   BTSYMB.S  A1,FINDFN1          il en reste dans le bucket
+          SOBGEZ    A4,FINDFN0          bucket suivant.
+          MOVNIL    A1                  sinon retourne NIL
+FINDFN9   RETURN    *                   c'es tout bon.
+ 
+ 
+*
+*         (SYNONYM at1 at2)
+*
+ 
+*----------------------------------------
+          FENTRY    SYNONYM,SUBR2
+*----------------------------------------
+          BFSYMB.S  A1,SYNMERR2         il faut un symbole
+          BTNIL.S   A1,SYNMERR2         on ne touche pas a NIL!
+          BFSYMB.S  A2,SYNMERR1         et la encore
+          MOV       CVAL(A2),CVAL(A1)   change la CVAL
+          MOV       PLIST(A2),PLIST(A1) change la PLIST
+          MOV       FVAL(A2),FVAL(A1)   change la FVAL
+          GFTYPE    A2,A3
+          SFTYPE    A3,A1               change le FTYPE
+          GPTYPE    A2,A3
+          SPTYPE    A3,A1               change le PTYPE
+          RETURN                        et c'est tout
+SYNMERR1  MOV       A2,A1               c'est le 2eme arg qui ne va pas
+SYNMERR2  MOV       .SYNONYM,A2         le nom de la fonction
+          BRA       ERRNAA              l'argument n'etait pas un symbole
+ 
+ 
+*
+*         Les Predicats de type simple
+*         ============================
+*
+ 
+*
+*         TRUE et FALSE
+*
+ 
+*----------------------------------------
+          FENTRY    TRUE,SUBR0
+*----------------------------------------
+          MOV       .T,A1
+          RETURN
+ 
+*----------------------------------------
+          FENTRY    FALSE,SUBR0
+*----------------------------------------
+          MOVNIL    A1
+          RETURN
+ 
+*
+*         NULL NOT ATOM SYMBOLP NUMBERP
+*         STRINGP LISTP CONSP BOUNDP : SUBR1
+*
+*
+ 
+*----------------------------------------
+          FENTRY    NULL,SUBR1
+*----------------------------------------
+          BTNIL     A1,TRUE
+          MOVNIL    A1
+          RETURN
+ 
+*----------------------------------------
+          FENTRY    NOT,SUBR1
+*----------------------------------------
+          BTNIL     A1,TRUE
+          MOVNIL    A1
+          RETURN
+ 
+*----------------------------------------
+          FENTRY    ATOM,SUBR1
+*----------------------------------------
+          BFCONS    A1,TRUE
+          MOVNIL    A1
+          RETURN
+ 
+*----------------------------------------
+          FENTRY    SYMBOLP,SUBR1
+*----------------------------------------
+          BTSYMB    A1,TRUE
+          MOVNIL    A1
+          RETURN
+ 
+*----------------------------------------
+          FENTRY    NUMBERP,SUBR1
+*----------------------------------------
+          BTNUMB.S  A1,NUMBPRET
+          MOVNIL    A1
+NUMBPRET  RETURN
+ 
+*----------------------------------------
+          FENTRY    STRINGP,SUBR1
+*----------------------------------------
+          BTSTRG.S  A1,STRGRET
+          MOVNIL    A1
+STRGRET   RETURN
+ 
+*----------------------------------------
+          FENTRY    LISTP,SUBR1
+*----------------------------------------
+          BTNIL     A1,TRUE
+          BTCONS    A1,TRUE
+          MOVNIL    A1
+          RETURN
+ 
+*----------------------------------------
+          FENTRY    CONSP,SUBR1
+*----------------------------------------
+          BTCONS    A1,TRUE
+          MOVNIL    A1
+          RETURN
+ 
+*----------------------------------------
+          FENTRY    BOUNDP,SUBR1
+*----------------------------------------
+          MOV       CVAL(A1),A2
+          BFEQ      A2,.UNDEF,TRUE
+          MOVNIL    A1
+          RETURN
+ 
+ 
+*
+*         EQ NEQ : SUBR2
+*
+ 
+*----------------------------------------
+          FENTRY    EQ,SUBR2
+*----------------------------------------
+          BTEQ      A1,A2,TRUE
+          MOVNIL    A1
+          RETURN
+ 
+*----------------------------------------
+          FENTRY    NEQ,SUBR2
+*----------------------------------------
+          BFEQ      A1,A2,TRUE
+          MOVNIL    A1
+          RETURN
+ 
+*
+*         EQUAL NEQUAL : SUBR2
+*
+ 
+*----------------------------------------
+          FENTRY    NEQUAL,SUBR2
+*----------------------------------------
+          PUSHAD    NOT                 pour inverser le resultat
+          BRA.S     EQUAL               de EQUAL
+          NOP                           Foo!
+ 
+*----------------------------------------
+          FENTRY    EQUAL,SUBR2
+*----------------------------------------
+          STACK     SAVEP               pour les retours rapides
+          CALL.S    EQUAL2              test proprement dit
+          MOV       .T,A1               si on en revient retourne T
+          RETURN
+ 
+EQUAL1    BFCONS.S  A2,EQUNO
+          CHKSTK    MSTACK,ERRFS
+          PUSH      CDR(A1)             sauve les 2 CDRs
+          MOV       CAR(A1),A1
+          PUSH      CDR(A2)
+          MOV       CAR(A2),A2
+          CALL.S    EQUAL2              recursion sur les CARs
+          POP       A2
+          POP       A1
+EQUAL2    BTCONS    A1,EQUAL1           iteration sur les CARs
+          BTEQ.S    A1,A2,EQUALRET      on continue
+EQUNO     SSTACK    SAVEP               ramene la pile a sa juste valeur
+          MOVNIL    A1                  retour FAUX
+EQUALRET  RETURN
+*
+ 
+ 
+ 
+*
+*         Les fonctions de recherche
+*         ==========================
+*
+ 
+*
+*         (MEMQ a l)   SUBR2
+*
+ 
+*----------------------------------------
+          FENTRY    MEMQ,SUBR2
+*----------------------------------------
+          BRA.S     MEMQ2
+MEMQ1     MOV       CAR(A2),A3          A3 <- l'element suivant
+          BTEQ.S    A3,A1,MEMQ3         c'est le selecteur ?
+          MOV       CDR(A2),A2          nan : continue
+MEMQ2     BTCONS    A2,MEMQ1            la liste est vide
+MEMQ3     MOV       A2,A1               retourne le dernier CDR
+          RETURN
+ 
+*
+*         (MEMBER s l)   SUBR2
+*
+ 
+*----------------------------------------
+          FENTRY    MEMBER,SUBR2
+*----------------------------------------
+          BRA.S     MEMB2
+MEMB1     PUSH      A2                  sauve la liste en entier
+          PUSH      A1                  sauve le test
+          MOV       CAR(A2),A2          element suivant de la lite
+          CALL      EQUAL               alors ?
+          BFNIL.S   A1,MEMB3            c'est cui la
+          POP       A1                  recupere le test
+          POP       A2                  recup le reste
+          MOV       CDR(A2),A2          avance
+MEMB2     BTCONS    A2,MEMB1            la liste est vide ?
+          MOV       A2,A1               retourne le dernier CDR
+          RETURN
+MEMB3     POP       A1                  recup le test
+          POP       A1                  retourne le reste de la liste
+          RETURN
+ 
+ 
+*
+*         (LAST l)  SUBR1
+*         retourne le dernier doublet d'une liste
+*         2 instructions par element !
+*
+ 
+*----------------------------------------
+          FENTRY    LAST,SUBR1
+*----------------------------------------
+          BFCONS.S  A1,LASTRET          pas d'argument
+LAST1     MOV       CDR(A1),A2          avance dans la liste
+          BFCONS.S  A2,LASTRET          A1 est le dernier doublet
+          MOV       CDR(A2),A1          avance dans la liste
+          BTCONS    A1,LAST1            elle est encore longue
+          MOV       A2,A1               retourne le dernier doublet
+LASTRET   RETURN
+ 
+ 
+*
+*         (NTHCDR n l)     SUBR2
+*         (NTH n l)        SUBR2
+*
+ 
+*----------------------------------------
+          FENTRY    NTH,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,NTHERR           ce n'est pas un nombre
+          CALL.S    NTH2                le reste est identique
+          MOV       CAR(A1),A1          retourne l'element
+          RETURN
+NTHERR    MOV       .NTH,A2             le nom de la fonction
+          RETURN    *
+ 
+*----------------------------------------
+          FENTRY    NTHCDR,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,NTHCERR          ce n'est pas un nb
+          BRA.S     NTH2
+NTH1      MOV       CDR(A2),A2          avance dans la liste
+NTH2      BFCONS    A2,FALSE            elle est terminee = NIL
+          SOBGEZ    A1,NTH1             il faut encore avancer
+          MOV       A2,A1               retourne la liste en l'etat
+          RETURN
+NTHCERR   MOV       .NTHCDR,A2          le nom de la fonction
+          BRA       ERRNNA              il fallait un nombre
+ 
+*
+*         (LENGTH l)   SUBR1
+*
+*----------------------------------------
+          FENTRY    LENGTH,SUBR1
+*----------------------------------------
+          MOV       #0,A2               raz le compteur
+          BRA.S     LENGT2
+LENGT1    MOV       CDR(A1),A1          avance dans la liste
+          INCR      A2                  et compte
+LENGT2    BTCONS    A1,LENGT1           la liste continue
+          MOV       A2,A1               retourne la taille de la liste
+          RETURN
+ 
+ 
+*
+*         Creation d'objets
+*         =================
+*
+*
+*         (CONS s1 s2)   SUBR2
+*         (XCONS s1 s2)   SUBR2
+*         (NCONS s1)   SUBR1
+*
+ 
+*----------------------------------------
+          FENTRY    FCONS,SUBR2
+*----------------------------------------
+          XCONS     A2,A1
+          RETURN
+ 
+*----------------------------------------
+          FENTRY    FXCONS,SUBR2
+*----------------------------------------
+          CONS      A2,A1
+          RETURN
+ 
+*----------------------------------------
+          FENTRY    FNCONS,SUBR1
+*----------------------------------------
+          NCONS     A1
+          RETURN
+ 
+ 
+*
+*         (MCONS e1 ... eN)   SUBRVN
+*
+ 
+*----------------------------------------
+          FENTRY    MCONS,SUBRVN
+*----------------------------------------
+          BTEQ      A4,#0,FALSE         (MCONS) = NIL
+          POP       A1                  le 1er element
+          DECR      A4                  decompte le 1er element
+          BRA.S     MCONS2              au travail.
+MCONS1    POP       A2                  element suivant
+          CONS      A2,A1
+MCONS2    SOBGEZ    A4,MCONS1           pour tous les elements
+          RETURN
+ 
+ 
+*
+*         (KWOTE s)   SUBR1
+*
+ 
+*----------------------------------------
+          FENTRY    KWOTE,SUBR1
+*----------------------------------------
+          NCONS     A1                  (arg)
+          CONS      .QUOTE,A1           (QUOTE arg)
+          RETURN
+ 
+*
+*         (MAKELIST n l)   SUBR2
+*
+ 
+*----------------------------------------
+          FENTRY    MAKELIST,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,MAKELER          le 1er argument
+          MOVNIL    A3                  tete de liste
+          BRA.S     MAKEL3              au boulot
+MAKEL2    CONS      A2,A3
+MAKEL3    SOBGEZ    A1,MAKEL2           il en faut encore
+          MOV       A3,A1               la valeur de retour
+          RETURN    *                   et c'est marre
+MAKELER   MOV       .MAKELIST,A2        nom de la fonction
+          BRA       ERRNNA              il fallait un nombre.
+ 
+*
+*         (REVERSE l1 l2)   SUBR2
+*
+ 
+*----------------------------------------
+          FENTRY    REVERSE,SUBRV2
+*----------------------------------------
+          BRA.S     REV2
+REV1      MOV       CAR(A1),A3
+          MOV       CDR(A1),A1
+          CONS      A3,A2
+REV2      BTCONS    A1,REV1
+          MOV       A2,A1
+          RETURN
+ 
+ 
+*
+*         (APPEND l1 l2)   SUBR2
+*         (APPEND1 l a)    SUBR2
+*
+ 
+*----------------------------------------
+          FENTRY    APPND1,SUBR2
+*----------------------------------------
+          NCONS     A2                  (APPEND1 l a) = (NCONS l (CONS a))
+          BRA.S     APPEND
+          NOP                           Argh!
+ 
+*----------------------------------------
+          FENTRY    APPEND,SUBR2
+*----------------------------------------
+          MOVNIL    A3                  fabrique le 1er doublet
+          NCONS     A3
+          PUSH      A3
+          BRA.S     APPEN3
+APPEN2    MOV       CAR(A1),A4
+          NCONS     A4
+          MOV       A4,CDR(A3)          rajoute le nouvel element
+          MOV       A4,A3               nouvelle fin de liste
+          MOV       CDR(A1),A1          avance dans la 1ere liste
+APPEN3    BTCONS    A1,APPEN2           il en reste
+          BFCONS.S  A2,APPEN4           s'il n'y a pas de 2eme arg
+          MOV       A2,CDR(A3)          accroche le 2eme argument
+APPEN4    POP       A1                  recup le tout
+          MOV       CDR(A1),A1
+          RETURN
+ 
+*
+*         (REMQ a l)   SUBR2
+*         actuellement recursif! (a iterativer)
+*
+ 
+*----------------------------------------
+          FENTRY    REMQ,SUBR2
+*----------------------------------------
+          BRA.S     REMQ4
+REMQ3     MOV       CDR(A2),A2
+REMQ4     BFCONS.S  A2,REMQ6            la liste est vide
+          MOV       CAR(A2),A3          A3 <- element suivant de l
+          BTEQ      A3,A1,REMQ3         c'est un element a ne pas copier.
+          CHKSTK    MSTACK,ERRFS
+          PUSH      A3                  sauve l'element a CONSER
+          MOV       CDR(A2),A2
+          CALL      REMQ                recurse sur le reste de la liste!
+          POP       A3
+          CONS      A3,A2               CONS recursif en retour
+REMQ6     MOV       A2,A1               retourne la fin de la liste
+          RETURN
+ 
+*
+*         (REMOVE s l)   SUBR2
+*         actuellement recursif! (a iterativer)
+*
+ 
+*----------------------------------------
+          FENTRY    REMOVE,SUBR2
+*----------------------------------------
+          BRA.S     REMV4
+REMV3     MOV       CDR(A2),A2
+REMV4     BTNIL.S   A2,REMV6            la liste est vide
+          MOV       CAR(A2),A3          A3 <- element suivant de l
+          BTEQ      A3,A1,REMV3         c'est un element a ne pas copier.
+          CHKSTK    MSTACK,ERRFS
+          PUSH      A3                  sauve l'element a CONSER
+          MOV       CDR(A2),A2
+          CALL      REMOVE              recurse sur le reste de la liste!
+          POP       A3
+          CONS      A3,A2               CONS recursif en retour
+REMV6     MOV       A2,A1               retourne la fin de la liste
+          RETURN
+ 
+*
+*         (COPY l)   SUBR1
+*         actuellement recursif! (A iterativer sur les CDR)
+*
+ 
+*----------------------------------------
+          FENTRY    COPY,SUBR1
+*----------------------------------------
+          BFCONS.S  A1,COPYRET          les atomes ne changent pas
+          CHKSTK    MSTACK,ERRFS
+          PUSH      CDR(A1)             sauve le CDR
+          MOV       CAR(A1),A1
+          CALL      COPY                recurse sur les CARs
+          XTOPST    A1
+          CALL      COPY                et sur les CDRs!
+          POP       A2
+          CONS      A2,A1               et construit enfin le doublet
+COPYRET   RETURN
+ 
+ 
+*
+*         ?!?!?!?!?  competement obsolete  ?!?!?!!
+*         (SUBST new old e)   SUBR3
+*         Petit SUBST avec EQ
+*
+ 
+*----------------------------------------
+          FENTRY    SUBST,SUBR3
+*----------------------------------------
+          BFSYMB.S  A3,SUBST1           SUBST est parfait
+          BTEQ.S    A2,A3,SUBSTRET      new est pret
+          MOV       A3,A1               retourne e
+SUBSTRET  RETURN
+SUBST1    CHKSTK    MSTACK,ERRFS
+          PUSH      A1                  sauve new
+          PUSH      CDR(A3)             sauve le reste de e
+          MOV       CAR(A3),A3
+          CALL      SUBST               recurse sur les CARs
+          POP       A3                  recup le reste
+          XTOPST    A1                  restaure new
+          CALL      SUBST               recurse sur les CDRs
+          POP       A4                  pour le CONS
+          CONS      A4,A1
+          RETURN
+ 
+ 
+*
+*         (SUBST new old e)   SUBR3
+*         Le gros actuellement recursif. A iterativer
+*
+ 
+*----------------------------------------
+          FENTRY    SUBSTITUTE,SUBR3
+*----------------------------------------
+          BFEQ.S    A1,A2,SUBSTT1       travail complet
+          MOV       A3,A1               COPY est plus rapide
+          BRA       COPY
+SUBSTT1   CHKSTK    MSTACK,ERRFS
+          PUSH      A1                  sauve new
+          MOV       A3,A1               change e et new
+          POP       A3                  A1 <- e, A2 <- old, A3 <- new
+SUBSTT2   PUSH      A1                  sauve e
+          PUSH      A2                  sauve old
+          PUSH      A3                  sauve new
+          CALL      EQUAL               et test e::old
+          POP       A3                  restaure new
+          POP       A2                  restaure old
+          BTNIL.S   A1,SUBSTT4          ce n'est pas le meme
+          POP       A1                  enleve l'ancien e
+          MOV       A3,A1               et retourne new
+SUBSTT3   RETURN
+SUBSTT4   POP       A1                  restaure e
+          BFCONS    A1,SUBSTT3          l'arbre est termine
+          PUSH      CDR(A1)             sauve le CDR
+          MOV       CAR(A1),A1          recurse sur les CARs
+          CALL      SUBSTT2
+          XTOPST    A1
+          CALL      SUBSTT2             et recurse sur les CDRs!
+          POP       A4
+          CONS      A4,A1               et enfin construit le doublet
+          RETURN
+ 
+*
+*         (OBLIST T/NIL)   SUBR1
+*         si T   retourne la liste des buckets de l'OBLIST
+*         si NIL retourne une liste unique de tous les symboles.
+*
+ 
+*----------------------------------------
+          FENTRY    OBLIST,SUBRV1
+*----------------------------------------
+          BFNIL.S   A1,OBLIST5          vers la liste des buckets.
+          MOV       HASHMAX,A3          le nombre de buckets
+OBLIST0   XMOV      A3,HASHTAB,A2       bucket suivant
+          BRA.S     OBLIST3             direct vers le test
+OBLIST1   BTEQ.S    A2,.UNDEF,OBLIST2   il faut sauter UNDEF
+          CONS      A2,A1
+OBLIST2   MOV       ALINK(A2),A2        symbole suivant
+OBLIST3   BTSYMB.S  A2,OBLIST1          il en reste dans le bucket
+          SOBGEZ    A3,OBLIST0          s'il reste des buckets
+          RETURN
+OBLIST5   MOVNIL    A1                  la liste des buckets.
+          MOV       HASHMAX,A3          le nombre de buckets
+OBLIST6   XMOV      A3,HASHTAB,A2       bucket suivant.
+          MOVNIL    A4                  la sous-liste bucket.
+          BRA.S     OBLIST9             direct sur le test.
+OBLIST7   BTEQ.S    A2,.UNDEF,OBLIST8   il faut sauter UNDEF la aussi.
+          CONS      A2,A4
+OBLIST8   MOV       ALINK(A2),A2        symbole suivant.
+OBLIST9   BTSYMB.S  A2,OBLIST7          il en reste dans le bucket
+          CONS      A4,A1               rajoute la liste bucket.
+          SOBGEZ    A3,OBLIST6          s'il reste des buckets
+          RETURN
+ 

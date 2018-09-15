@@ -1,0 +1,484 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :  les	fonctions	de controle et
+*		      de definition
+*
+****************************************************************
+*
+*	       Jerome CHAILLOUX  (Chailloux.Vlsi)
+*		        I.N.R.I.A.
+*	       Domaine de Voluceau,  Rocquencourt
+*	       B.P. 105,   78153 Le Chesnay Cedex
+*	       tel : (1) 954 90 20	  poste 456
+*
+*****************************************************************
+
+
+
+	TITRE	CNTL	 LLM3 : les fonctions de controle
+
+	PURE
+
+	XREF	BUILDAT,CSYMB		pour MAKFNT
+	XREF	GC			pour CONS
+	XREF	HASHMAX,HASHTAB			in RTLLM3
+	XREF	ERRNAA,ERRNNA,ERRNLA,ERRNVA		in TOPERR
+	XREF	EVALCAR,EVALA1,SAVEP,APPLY in	EVAL
+	XREF	MEMBER				in FNTSTD
+	XREF	.UNDEF,.T,.VOID,.QUOTE,.INTERNAL
+	XREF	ADDPROP,GETPROP,PUTPROP,REMPROP
+
+	XDEF	INI_CTL
+	XDEF	.DE,.DF,.DM
+
+*
+*	Creation des symboles
+*	=====================
+*
+
+INI_CTL	EQU	*
+	NOLIST
+
+	MAKCST	LFF,0,.VOID,16,'LOADED-FROM-FILE'
+	MOV	.LFF,A1		pour y mettre NIL
+	MOVNIL	CVAL(A1)		et c'est fait
+	MAKFNT	DE,0,.VOID,5,'DEFUN'
+	MAKFNT	DE,0,.VOID,2,'DE'
+	MAKFNT	DF,0,.VOID,2,'DF'
+	MAKFNT	DM,0,.VOID,2,'DM'
+	MAKFNT	RDE,0,.VOID,3,'RDE'
+	MAKFNT	RDF,0,.VOID,3,'RDF'
+	MAKFNT	RDM,0,.VOID,3,'RDM'
+	MAKFNT	REVERT,0,.VOID,6,'REVERT'
+	MAKFNT	IF,0,.VOID,2,'IF'
+	MAKFNT	IFN,0,.VOID,3,'IFN'
+	MAKFNT	WHEN,0,.VOID,4,'WHEN'
+	MAKFNT	UNLESS,0,.VOID,6,'UNLESS'
+	MAKFNT	COND,0,.VOID,4,'COND'
+	MAKFNT	OR,0,.VOID,2,'OR'
+	MAKFNT	AND,0,.VOID,3,'AND'
+	MAKFNT	WHILE,0,.VOID,5,'WHILE'
+	MAKFNT	UNTIL,0,.VOID,5,'UNTIL'
+	MAKFNT	FREPEAT,0,.VOID,6,'REPEAT'
+	MAKFNT	SELECTQ,0,.VOID,7,'SELECTQ'
+	MAKFNT	MAP,0,.VOID,3,'MAP'
+	MAKFNT	MAPC,0,.VOID,4,'MAPC'
+	MAKFNT	MAPOBLIST,0,.VOID,9,'MAPOBLIST'
+
+FALSE	MOVNIL	A1
+POPJ	RETURN
+
+TRUE	MOV	.T,A1
+	RETURN
+
+PROGNA3	MOV	A3,A1
+PROGN	BTCONS	A1,PROGN2		c'est parti
+	BRA	FALSE
+PROGN1	PUSH	A2		sauve le reste
+	CALL	EVALCAR		evalue l'element
+	POP	A1
+PROGN2	MOV	CDR(A1),A2	le reste
+	BTCONS	A2,PROGN1		il en reste au - 2
+	BRA	EVALCAR		JUMP pour	le dernier element
+
+
+*
+*	Fonctions	de definition statique
+*	================================
+*
+
+*
+RDEF	EQU	*
+	PUSH	A1		sauve tout l'appel
+	MOV	CAR(A1),A1	A1 <- le nom de la fonction
+	MOV	FVAL(A1),A2	A2 <- oldFVAL
+	NCONS	A2		fabrique (oldFVAL)
+	GFTYPE	A1,A3		A3 <- olfFTYPE
+	CONS	A3,A2		fabrique (oldFTYPE oldFVAL)
+	MOV	.INTERNAL,A3	indic de ADDPROP
+	CALL	ADDPROP		sauve l'ancienne def
+	POP	A1		et recupere tout l'appel
+*				* DEF doit suivre ...
+
+DEF	EQU	*
+	MOV	CDR(A1),A2	A2 <- ((lvar) corps)
+	MOV	CAR(A1),A1	A1 <- le nom de la fonction
+	SFTYPE	A3,A1		force le nouvel FTYPE
+	MOV	A2,FVAL(A1)	force la nouvelle FVAL
+	MOV	.LFF,A3		le symbole 'LOADED-FROM-FILE'
+	MOV	CVAL(A3),A2	sa valeur.
+	BTNIL	A2,POPJ		pas de fichier actif
+	BRA	PUTPROP		il est actif.
+
+*
+*	DE DF DM
+*	detruisent l'ancien	couple FTYP/FVAL
+*
+*----------------------------------------
+	FENTRY	DE,SUBRF
+*----------------------------------------
+	MOV	#EXPR,A3
+	BRA.S	DEF
+
+*----------------------------------------
+	FENTRY	DF,SUBRF
+*----------------------------------------
+	MOV	#FEXPR,A3
+	BRA.S	DEF
+
+*----------------------------------------
+	FENTRY	DM,SUBRF
+*----------------------------------------
+	MOV	#MACRO,A3
+	BRA	DEF
+
+*
+*	RDE RDF RDM
+*	sauvent l'ancien couple FTYP/FVAL
+*
+
+*----------------------------------------
+	FENTRY	RDE,SUBRF
+*----------------------------------------
+	MOV	#EXPR,A3
+	BRA	RDEF
+
+*----------------------------------------
+	FENTRY	RDF,SUBRF
+*----------------------------------------
+	MOV	#FEXPR,A3
+	BRA	RDEF
+
+*----------------------------------------
+	FENTRY	RDM,SUBRF
+*----------------------------------------
+	MOV	#MACRO,A3
+	BRA	RDEF
+
+
+*
+*	(REVERT at)
+*	remet l'ancienne definition de at
+*
+*----------------------------------------
+	FENTRY	REVERT,SUBR1
+*----------------------------------------
+	PUSH	A1		sauve le nom de la fonction
+	MOV	.INTERNAL,A2
+	CALL	GETPROP		recupere l'ancienne	def
+	POP	A3		recup le nom
+	BTNIL	A1,POPJ		il n'y avait pas de	def
+	MOV	CAR(A1),A4	A4 <- ancien FTYPE
+	MOV	A4,FTYPE(A3)	force l'ancien FTYPE
+	MOV	CDR(A1),A4	A4 <- (FVAL)
+	MOV	CAR(A4),A4	A4 <- FVAL
+	MOV	A4,FVAL(A3)	force l'ancienne FVAL
+	BRA	REMPROP		et enleve	l'ancienne def
+
+
+*
+*	Fonctions	de controle
+*	=====================
+
+*
+*	IF : SUBRF. La fonction conditionnelle la plus simple
+*	et ses soeurs IFN, WHEN, UNLESS
+*	permet de	traiter les recursions terminales
+*
+*----------------------------------------
+	FENTRY	IF,SUBRF
+*----------------------------------------
+	PUSH	CDR(A1)		sauve (then else)
+	CALL	EVALCAR		evalue le	test
+	POP	A2		recupere (then else)
+	MOV	CDR(A2),A3	A3 <- else
+	BTNIL	A1,PROGNA3	evalue le	else
+	MOV	CAR(A2),A1	A1 <- le then
+	BRA	EVALA1		qui est evalue
+
+
+*----------------------------------------
+	FENTRY	IFN,SUBRF
+*----------------------------------------
+	PUSH	CDR(A1)		sauve (then else)
+	CALL	EVALCAR		evalue le	test
+	POP	A2		recup (then else)
+	MOV	CDR(A2),A3	A3 <- (else)
+	BFNIL	A1,PROGNA3	evalue le	else
+	MOV	CAR(A2),A1	A1 <- le then
+	BRA	EVALA1		et on l'evalue
+
+
+*----------------------------------------
+	FENTRY	WHEN,SUBRF
+*----------------------------------------
+	PUSH	CDR(A1)		sauve le corps
+	CALL	EVALCAR		evalue le	test
+	POP	A3		recup le corps
+	BFNIL	A1,PROGNA3	evalue le	corps si vrai
+	RETURN	*		NIL est pret dans A1
+
+
+*----------------------------------------
+	FENTRY	UNLESS,SUBRF
+*----------------------------------------
+	PUSH	CDR(A1)		sauve le corps
+	CALL	EVALCAR		evalue le	test
+	POP	A3		recup le corps
+	BTNIL	A1,PROGNA3	evalue le	corps si faux
+	MOVNIL	A1		doit retourner NIL
+	RETURN	*		et c'est tout
+
+
+*
+*	COND : SUBRF. La fonction conditionnelle la plus connue!
+*	permet de	traiter les recursions terminales
+*
+*----------------------------------------
+	FENTRY	COND,SUBRF
+*----------------------------------------
+	MOV	A1,A2		facilite le travail
+COND1	BFCONS.S	A2,CONDRET	ya plus de clauses
+	PUSH	CDR(A2)		sauve le reste des clauses
+	MOV	CAR(A2),A1	A1 <- clause suivante
+	BFCONS.S A1,CONDER		une clause DOIT etre une liste.
+	PUSH	CDR(A1)		sauve le reste de la clause
+	CALL	EVALCAR		evalue le	predicat
+	POP	A3		A3 <- le corps de la clause
+	POP	A2		A2 <- le reste des clauses
+	BTNIL.S	A1,COND1		le predicat a retourne NIL
+	BFNIL	A3,PROGNA3	evalue le	corps de la clause
+CONDRET	RETURN			en cas de	clause vide
+CONDER	MOV	.COND,A2		qui provoque l'erreur
+	BRA	ERRNLA
+
+
+*
+*	OR AND : SUBRF, les	connecteurs logiques
+*	permettent de traiter les recursions terminales
+*
+
+*----------------------------------------
+	FENTRY	OR,SUBRF
+*----------------------------------------
+	BFCONS	A1,FALSE		(OR) -> NIL
+	MOV	A1,A2		pour rentrer dans la boucle.
+OR1	PUSH	A2		sauve le reste
+	CALL	EVALCAR		evalue l'element suivant
+	BFNIL.S	A1,PRET		retourne sa val si /= NIL
+	POP	A1
+	MOV	CDR(A1),A2	A2 <- le reste des elements
+OR2	BTCONS.S	A2,OR1		on evalue	le dernier (tail rec)
+	BRA	EVALCAR		on evalue	le dernier (tail-rec)
+
+
+*----------------------------------------
+	FENTRY	AND,SUBRF
+*----------------------------------------
+	BFCONS	A1,TRUE		(AND) -> T et oui
+AND1	MOV	CDR(A1),A2	A2 <- le reste des elements
+	BFCONS	A2,AND2		BR pour le dernier element (tail-rec)
+	PUSH	A2		sauve le reste des elem
+	CALL	EVALCAR		evalue l'element suivant
+	BTNIL.S	A1,PRET		si NIL retourne NIL
+	POP	A1		recup le reste des elem
+	BRA.S	AND1		et ca continue ...
+AND2	BRA	EVALCAR
+*
+PRET	POP	A2		nettoie la pile
+	RETURN			et rentre
+
+
+*
+*	WHILE : SUBRF et UNTIL : SUBRF
+*	ne permet	evidemment pas de traiter les	recursions terminales
+*	car dans un WHILE il n'y a rien  en position terminale
+*
+
+*----------------------------------------
+	FENTRY	WHILE,SUBRF
+*----------------------------------------
+	PUSH	A1		sauve toute la forme
+	BRA.S	WHILE2		et on y va.
+WHILE1	TOPST	A1		recup toute la forme
+	MOV	CDR(A1),A1	le corps
+	CALL	PROGN		est evalue
+WHILE2	TOPST	A1		recup toute la forme
+	CALL	EVALCAR		le  test est evalue
+	BFNIL.S	A1,WHILE1		il faut reevaluer le corps
+	POP	A2		nettoie la pile
+	RETURN			et on retourne toujours NIL
+
+
+*----------------------------------------
+	FENTRY	UNTIL,SUBRF
+*----------------------------------------
+	PUSH	A1		sauve toute l'espression
+	BRA.S	UNTIL2		et on y va ...
+UNTIL1	TOPST	A1		recupere toute l'expression
+	MOV	CDR(A1),A1	le corps
+	CALL	PROGN		est evalue
+UNTIL2	TOPST	A1		recupere toute l'expression
+	CALL	EVALCAR		le test est evalue
+	BTNIL.S	A1,UNTIL1		il faut reevaluer le corps
+	POP	A2		nettoie la pile
+	RETURN			ramene la	valeur du	dernier test
+
+
+*
+*	REPEAT : fait n iterations
+*
+*----------------------------------------
+	FENTRY	FREPEAT,SUBRF
+*----------------------------------------
+	PUSH	CDR(A1)		sauve le corps
+	CALL	EVALCAR		evalue le	compte
+	MOV	A1,A2		A2 <- la valeur du compteur
+	POP	A1		A1 <- le corps
+	BTNUMB.S	A2,REPEAT2	au travail
+	MOV	A2,A1		l'argument defectueux
+	MOV	.FREPEAT,A2	le nom de	la fonction
+	BRA	ERRNNA		il fallait un nombre.
+REPEAT1	PUSH	A1		sauve le corps
+	PUSH	A2		sauve le compteur
+	CALL	PROGN		evalue le	corps
+	POP	A2		recup le compteur
+	POP	A1		recup le corps
+REPEAT2	SOBGEZ	A2,REPEAT1	et ca roule ...
+	BRA	TRUE		et sinon retourne T.
+
+*
+*	SELECTQ :	la super fonction de choix avec MEMBER
+*
+*----------------------------------------
+	FENTRY	SELECTQ,SUBRF
+*----------------------------------------
+	PUSH	CDR(A1)		sauve la liste des clauses
+	CALL	EVALCAR		evalue le	selecteur
+	POP	A3		A3 <- la liste des clauses
+	BRA.S	SELEC4		et on y va ...
+SELEC2	BTEQ	A4,A1,PROGNA3	c'est le bon, evalue le corps
+	BTEQ	A4,.T,PROGNA3	c'est la clause T (otherwise)
+SELEC3	MOV	A2,A3		A3 <- reste des clauses
+SELEC4	BFCONS	A3,FALSE		plus de clauses
+	MOV	CDR(A3),A2	A2 <- nouveau reste	des clauses
+	MOV	CAR(A3),A3	A3 <- la clause suivante
+	BFCONS.S	A3,SELECER	qui doit etre une liste!
+	MOV	CAR(A3),A4	A4 <- le selecteur
+	MOV	CDR(A3),A3	A3 <- le corps de la clause
+	BFCONS.S	A4,SELEC2		c'est un selecteur simple
+	PUSH	A1		sauve le selecteur
+	PUSH	A2		sauve le reste des clauses
+	PUSH	A3		sauve le corps de la clause
+	MOV	A4,A2		A4 <- liste des choix
+	CALL	MEMBER		pour la selection
+	POP	A3		recupere le corps de la clause
+	POP	A2		recupere le reste des clauses
+	BTNIL.S	A1,SELEC5		c'est pas	celui-la.
+	POP	A1		nettoie la pile
+	BRA	PROGNA3		et evalue	le corps
+SELEC5	POP	A1		recupere le selecteur
+	BRA.S	SELEC3		et au suivant.
+SELECER	MOV	A3,A1		l'argument defectueux.
+	MOV	.SELECTQ,A2	le nom de	la fonction
+	BRA	ERRNLA		il fallait une liste.
+
+
+*
+*	Fonctionnelles
+*	==============
+*
+*	(MAPC fnt	larg1 ...	largN)
+*	(MAP fnt larg1 ... largN)
+*	les plus generales a N arguments !
+
+*----------------------------------------
+	FENTRY	MAPC,SUBRN
+*----------------------------------------
+	PUSH	CAR(A1)		empile la	fonction
+	PUSH	#MK_MAP		marque la	fin des listes-args
+	BRA.S	MAPC11		et on y va ...
+MAPC1	PUSH	CAR(A1)		empile la	liste-arg	suivante
+MAPC11	MOV	CDR(A1),A1	avance dans les listes-args
+	BTCONS.S	A1,MAPC1		il en reste
+MAPC2	STACK	SAVEP		sauve le haut de la	pile
+	MOVNIL	A2		list-arg pour APPLY
+	MOVNIL	A3		indic toutes les listes sont vides
+	BRA.S	MAPC6
+MAPC3	BTCONS.S	A4,MAPC4		la liste-arg est vide
+	CONS	A4,A2		element simple
+	BRA.S	MAPC5
+MAPC4	MOV	A4,A3		indic vrai
+	MOV	CAR(A4),A1	CAR pour MAPC
+	CONS	A1,A2		larg pour	APPLY
+	MOV	CDR(A4),A4	avance dans list-arg
+MAPC5	XTOPST	A4		remet liste-arg a sa place
+	POP	A4		on saute la liste-arg traitee
+MAPC6	TOPST	A4		liste-arg	suivante
+	BFEQ	A4,#MK_MAP,MAPC3	il en reste
+	POP	A4		enleve la	marque
+	POP	A1		recupere la FVAL
+	BTNIL	A3,FALSE		c'est fini
+	SSTACK	SAVEP		remet la pile en ordre
+	CALL	APPLY
+	BRA	MAPC2		ca roule
+
+
+*----------------------------------------
+	FENTRY	MAP,SUBRN
+*----------------------------------------
+	PUSH	CAR(A1)		empile la	fonction
+	PUSH	#MK_MAP		marque fin des listes args
+	BRA.S	MAP11
+MAP1	PUSH	CAR(A1)		empile la	liste-arg	suivante
+MAP11	MOV	CDR(A1),A1	avance dans les liste-args
+	BTCONS	A1,MAP1		il en reste
+MAP2	STACK	SAVEP		sauve le haut de la	pile
+	MOVNIL	A2		liste-arg	pour APPLY
+	MOVNIL	A3		indic toutes les listes sont vides
+	BRA.S	MAP6
+MAP3	BTCONS.S	A4,MAP4		la liste-arg est vide
+	CONS	A4,A2		atome simple
+	BRA.S	MAP5
+MAP4	MOV	A4,A3		indic vrai
+	CONS	A4,A2		larg pour	APPLY
+	MOV	CDR(A4),A4	avance dans liste-arg
+MAP5	XTOPST	A4		remet liste-arg a sa place
+	POP	A4		on saute la liste-arg traitee
+MAP6	TOPST A4		liste-arg	suivante
+	BFEQ	A4,#MK_MAP,MAP3	il en reste
+	POP	A4		enleve la	marque
+	POP	A1		recupere la FVAL
+	BTNIL	A3,FALSE		c'est fini
+	SSTACK	SAVEP		remet la pile en ordre
+	CALL	APPLY
+	BRA	MAP2
+
+
+*
+*	(MAPOBLIST fnt)  retourne T
+*	applique la fonction 'fnt' a tous les symboles de	l'OBLIST!
+*
+*----------------------------------------
+	FENTRY	MAPOBLIST,SUBR1
+*----------------------------------------
+	MOV	HASHMAX,A3	taille de	la table de hachage
+MAPOB0	XMOV	A3,HASHTAB,A2	le bucket	suivant
+	BRA.S	MAPOB3		vers le test direct
+MAPOB1	BTEQ.S	A2,.UNDEF,MAPOB2	on saute le symbole	UNDEF
+	PUSH	A3		sauve le numero du bucket
+	PUSH	A2		sauve le symbole courant
+	NCONS	A2		(arg) pour apply
+	PUSH	A1		sauve la fonction
+	CALL	APPLY		et on applique
+	POP	A1		la fonction
+	POP	A2		le symbole courant
+	POP	A3		l'index de la table	de hachage
+MAPOB2	MOV	ALINK(A2),A2	next atom
+MAPOB3	BTSYMB.S	A2,MAPOB1		il en reste
+	SOBGEZ	A3,MAPOB0		vers le bucket suivant.
+	BRA	TRUE		retourne toujours T
+
+	END
+
+

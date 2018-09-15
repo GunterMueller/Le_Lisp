@@ -1,0 +1,370 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :  le "garbage-collector"
+*
+****************************************************************
+*
+*                Jerome CHAILLOUX  (Chailloux.Vlsi)
+*                           I.N.R.I.A.
+*                Domaine de Voluceau,  Rocquencourt
+*                B.P. 105,   78153 Le Chesnay Cedex
+*                tel : (1) 954 90 20      poste 456
+*
+*****************************************************************
+ 
+ 
+ 
+*         Actuellement ne recupere vraiment que les listes et les
+*         chaines en utilisant ce bon 'sweep & mark'. Les symboles
+*         et les tableaux sont alloues statiquement.
+ 
+          TITRE     GC       LLM3 : garbage collecting.
+ 
+*
+*         conditonnelles et constantes du GC
+*
+ 
+GCDEBUG   EQU       0                   =1 si DEBUG, =0 si normal
+ 
+MINCELL   EQU       400                 nb mini de doublets sinon ERFM
+MASKNB    EQU       $FFFF               masque d'un nombre
+ 
+          XREF      BSTACK,ESTACK,BCONS,ECONS
+          XREF      BSTRG,ESTRG,FSTRG
+          XREF      BARRAY,EARRAY
+          XREF      BUILDAT,CSYMB
+          XREF      HASHMAX,HASHTAB
+          XREF      POPJ,FALSE,TRUE
+          XREF      MSTACK,ERRFS
+          XREF      ERFM,ERRNAA,ERRNNA,ERRNLA
+          XREF      ITSOFT,REENTER
+          XREF      PROBJ,PROBJT
+          XREF      .T,.UNDEF,.VOID,.ATOM,.STRING,.FCONS,.FFSYMBOL
+          XREF      LENGTH
+ 
+          XDEF      GC,INI_GC
+ 
+          PURE
+ 
+ 
+*
+*         INI_GC : initialise le GC
+*         =========================
+*
+ 
+INI_GC    EQU       *
+          NOLIST
+ 
+          MAKFNT    GCUSER,0,.VOID,2,'GC'
+          MAKFNT    GCALARM,0,.VOID,7,'GCALARM'
+          MAKFNT    GCINFO,0,.VOID,6,'GCINFO'
+ 
+          MAKFNT    TCONS,0,.VOID,5,'TCONS'
+          MAKFNT    TCONSP,0,.VOID,6,'TCONSP'
+ 
+          MOV       #0,GCN              raz le compteur
+ 
+*         Initialisation de la zone ARRAY
+ 
+     IFNE DEBUG
+          XREF      LL_TTYO
+          MSG       8,<' GC_ARRA'>
+     ENDC
+          MOVNIL    A1                  marqueur de fin de liste (=NIL)
+          MOV       BARRAY,A2           debut
+          MOV       EARRAY,A3           fin
+          BRA.S     IFRSA2              au travail
+IFRSA1    MOV       A1,VAL(A2)          curr
+          NXARRAY   A2                  chaine suivante
+IFRSA2    CBLE      A2,A3,IFRSA1
+ 
+*         Initialisation de la liste libre des chaines
+*         et du pointeur FSTRG (i.e. Free STRinG)
+ 
+     IFNE DEBUG
+          MSG       8,<' GC_STRG'>
+     ENDC
+          MOVNIL    A1                  marqueur de fin de liste (=NIL)
+          MOV       BSTRG,A2            A2 = free
+          MOV       ESTRG,A3            A3 la fin.
+          BRA.S     IFRSS2              au travail
+IFRSS1    MOV       A1,VAL(A2)          curr
+          MOV       A2,A1               prev
+          NXSTRG    A2                  chaine suivante
+IFRSS2    CBLE      A2,A3,IFRSS1        il en reste encore.
+          MOV       A1,FSTRG            A1 = CURRENT FREE STRING
+ 
+*         Initialisation de la liste libre des CONS
+ 
+     IFNE DEBUG
+          MSG       8,<' GC_CONS'>
+     ENDC
+          MOVNIL    A1                  marqueur de fin de liste (=NIL)
+          MOV       BCONS,A2            A2 = free
+          MOV       ECONS,A3            la fin de la zone
+          BRA.S     IFRLS2              au travail
+IFRLS1    MOVNIL    CAR(A2)             les CAR = NIL
+          MOV       A1,CDR(A2)          prev
+          MOV       A2,A1               le dernier (FREE)
+          NXCONS    A2                  au CONS suivant
+IFRLS2    CBLE      A2,A3,IFRLS1        il en reste.
+          SFREEL    A1                  sauve le FREE CONS
+ 
+ 
+          RETURN
+ 
+*         relais d'erreur pour la SM90!
+ 
+ERRFM     BRA       ERFM
+ 
+ 
+*
+*         Entree du Garbage Collecting
+*         ============================
+*
+ 
+GC        EQU       *
+ 
+*         sauve le contexte de l'appelant
+ 
+     IFNE GCDEBUG
+          XREF      LL_TTYO
+          MSG       6,<' SAVE '>
+     ENDC
+          PUSH      A1
+          PUSH      A2
+          PUSH      A3
+          PUSH      A4                  sauve les 4 registres garbageables
+ 
+          INCR      GCN                 le compteur de GC
+ 
+*         marquage de la pile
+ 
+     IFNE GCDEBUG
+          MSG       6,<' STAK '>
+     ENDC
+          STACK     A4                  recupere le pointeur de pile
+GCST1     POP       A1,A4               element suivant
+          CALL      MARK                on marque
+          CBLT      A4,BSTACK,GCST1     jusqu'a la fin de la pile
+ 
+*         marquage de la zone symbole
+ 
+     IFNE GCDEBUG
+          MSG       6,<' SYMB '>
+     ENDC
+          MOV       HASHMAX,A3          taille de la table de hachage
+GCAT0     XMOV      A3,HASHTAB,A4       nouveau bucket
+          BRA.S     GCAT2               direct sur le test
+GCAT1     MOV       CVAL(A4),A1         la cval
+          CALL      MARK
+          MOV       PLIST(A4),A1        la p-list
+          CALL      MARK
+          MOV       FVAL(A4),A1         la fval
+          CALL      MARK
+          MOV       ALINK(A4),A4        symbole suivant
+GCAT2     BTSYMB    A4,GCAT1            il en reste
+          SOBGEZ    A3,GCAT0            autre bucket
+ 
+*         balaie la zone CHAINE
+ 
+     IFNE GCDEBUG
+          MSG       6,<' SWES '>
+     ENDC
+          MOVNIL    A1                  init FSTRG
+          MOV       #0,A2               init FREES
+          MOV       BSTRG,A4
+          MOV       ESTRG,A3            fin de la zone liste
+GCSWS1    TCMARK.S  VAL(A4),GCSWS2      c'etait marque : au suivant
+          MOV       A1,VAL(A4)          chaine
+          MOV       A4,A1               nouveau FSTRG
+          INCR      A2                  compte FREES
+GCSWS2    NXSTRG    A4                  au suivant
+          CBLE      A4,A3,GCSWS1        encore...
+          MOV       A1,FSTRG            nouveau FREE STRING
+          MOV       A2,FREES            range le nb de chaines recuperees.
+ 
+*         balaie la zone des CONS
+ 
+     IFNE GCDEBUG
+          MSG       6,<' SWEL '>
+     ENDC
+          MOVNIL    A1                  init FREE
+          MOV       #0,A2               compteur de doublet libre
+          MOV       ECONS,A3            fin de la zone liste
+          MOV       BCONS,A4
+GCSW1     TCMARK.S  (A4),GCSW2          c'etait marque : au suivant
+          MOV       A1,CDR(A4)          chaine
+          MOVNIL    CAR(A4)             clean, clean
+          MOV       A4,A1               nouveau FREE
+          INCR      A2                  compte
+GCSW2     NXCONS    A4                  au suivant
+          CBLT      A4,A3,GCSW1         encore...
+          SFREEL    A1                  nouveau FREE List
+          MOV       A2,FREEL            range le nb de doublets recuperes.
+ 
+*         test 'full memory'
+ 
+     IFNE GCDEBUG
+          MSG       6,<' FULM '>
+     ENDC
+          CBLT      A2,#MINCELL,ERFM    vers les erreurs fatales
+ 
+*         appel l'IT soft GCALARM
+ 
+     IFNE GCDEBUG
+          MSG       6,<' STEP '>
+     ENDC
+          MOV       .GCALARM,A1         nom de l'IT
+          MOVNIL    A2                  sans argument
+          CALL      ITSOFT              et on l'execute
+ 
+*         restauration du contexte de l'appelant
+ 
+     IFNE GCDEBUG
+          MSG       6,<' REST '>
+     ENDC
+          POP       A4                  restaure les 4 registres garbageables
+          POP       A3
+          POP       A2
+          POP       A1
+          RETURN                        et c'est tout
+ 
+*
+*         Marquage d'un objet Lisp
+*         ========================
+*
+ 
+MARK      EQU       *                   marque l'objet dans A1
+          BTCONS.S  A1,MARKL            on privilegie les listes.
+          BFSTRG.S  A1,MARKS2           Et pour les atomes,
+          STMARK    VAL(A1)                on ne marque que les chaines.
+MARKS2    RETURN    *
+ 
+MARKL     EQU       *                   marque la liste contenue dans A1
+          CBLT.S    A1,ECONS,MARKL2     c'est un bon objet
+          XDEF      OVNI                pour le DEBUG SYMBOLIQUE
+OVNI      EQU       *
+          XREF      LL_TTYO             pour le MSG!
+          MSG       12,<' ** OVNI ** '>
+MARKL0    RETURN    *                   que voulez-vous qu'il fit ?
+MARKL2    EQU       *                   *** cas doublet invisible
+          BFINVSBL  CDR(A1),MARKL3      ce n'est pas invisible
+          BTMARK    CAR(A1),MARKL0      le doublet est deja marque
+          CLINVSBL  CDR(A1)             il n'y a plus aucune marque.
+          MOV       CAR(A1),A2          pour le set mark
+          CHKSTK    ESTACK,ERRFS        erreur fatale!!
+          PUSH      CDR(A1)             sauve le reste (a optimiser apres)
+          STMARK    CAR(A1)             force une marque
+          STINVSBL  CDR(A1)
+          MOV       A2,A1               pour marquer le CAR
+          CALL      MARK                vazy
+          POP       A1                  recupere le CDR
+          BRA       MARK
+MARKL3    EQU       *                   *** cas doublet normal
+          BTMARK    CAR(A1),MARKL0      le doublet est deja marque
+          MOV       CAR(A1),A2          pour le set mark
+          CHKSTK    ESTACK,ERRFS        erreur fatale!!
+          PUSH      CDR(A1)             sauve le reste (a optimiser apres)
+          STMARK    CAR(A1)             force une marque
+          MOV       A2,A1               pour marquer le CAR
+          CALL      MARK                vazy
+          POP       A1                  recupere le CDR
+          BRA       MARK
+ 
+*
+*         Fonctions utilisateur
+*         =====================
+*
+ 
+*
+*         Appel explicite du GC, retourne la taille de la liste libre
+*
+ 
+*----------------------------------------
+          FENTRY    GCUSER,SUBR0
+*----------------------------------------
+     IFNE GCDEBUG
+          MSG       7,<' GC_ON '>
+     ENDC
+          CALL      GC
+     IFNE GCDEBUG
+          MSG       8,<' GC_OFF '>
+          MSGCRLF
+     ENDC
+GCUSER1   MOV       FREEL,A1            la derniere taille de la liste libre
+          LAND      #MASKNB,A1           'boxing' de cette valeur
+          RETURN    *                   et c'est tout
+ 
+*
+*         GCALARM, appelee automatiquement apres chaque GC
+*
+ 
+*----------------------------------------
+          FENTRY    GCALARM,SUBR0
+*----------------------------------------
+          MOVNIL    A1                  il faut bien retourner qch
+          RETURN    *                   en standard ne fait rien.
+ 
+*
+*         GCINFO : retourne les infos relatives au dernier GC
+*
+ 
+*----------------------------------------
+          FENTRY    GCINFO,SUBR0
+*----------------------------------------
+          MOV       FREEL,A1            recup le nb de doublets du dernier GC
+          LAND      #MASKNB,A1           'boxing'
+          NCONS     A1                  on en fait une liste
+          CONS      .FCONS,A1           (CONS <n>)
+          MOV       FREES,A2            nb de chaines recuperees
+          CONS      A2,A1
+          CONS      .STRING,A1          (STRING <n> ....
+          MOV       BCONS,A2            calcul de la taille
+          DIFF      CSYMB,A2              restante dans la zone symbole
+          QUO       #4,A2               en mot de 32 bits!
+          CONS      A2,A1               fabrique (size-at size-liste)
+          CONS      .FFSYMBOL,A1        (SYMBOL <n> ....
+          CONS      GCN,A1
+          CONS      .GCUSER,A1          (GC <n> ....
+          RETURN    *                   et c'est tout.
+ 
+*
+*         Les fonctions qui traitent du bit invisible
+*         ===========================================
+*
+ 
+*----------------------------------------
+          FENTRY    TCONS,SUBR2
+*----------------------------------------
+          BFCONS    A2,TCONSERR         pour prevenir JMH
+          XCONS     A2,A1
+          STINVSBL  CDR(A1)             force le bit invisible
+          RETURN    *
+TCONSERR  MOV       A2,A1               le CDR deffectuex
+          MOV       .TCONS,A2           le nom de la fonction
+          BRA       ERRNLA              il fallait une liste!
+ 
+*----------------------------------------
+          FENTRY    TCONSP,SUBR1
+*----------------------------------------
+          BFCONS.S  A1,TCONSP1          il faut un CONS
+          BTINVSBL.S  CDR(A1),TCONSP2   avec le bit invisible
+TCONSP1   MOVNIL    A1                  retourne NIL ou le CONS!
+TCONSP2   RETURN
+ 
+ 
+*
+*         Donnees du G.C.
+*         ===============
+*
+ 
+          IMPURE
+ 
+GCN       ADR       0                   nb de GC effectues depuis le debut
+ 
+FREES     ADR       0                   nb de chaines recuperees.
+FREEL     ADR       0                   nb de doublets recuperes.
+ 
+          END
+ 

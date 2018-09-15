@@ -1,0 +1,6 @@
+# Imprime tout le code de la bibliotheque Le_Lisp 80
+############################################################
+#
+/usr/local/mdp LISEZ.MOI header.ll startup.ll virtty.ll hanoi.ll vdt.ll pepe.ll peptop.ll pepln1.ll pepln2.ll pepln3.ll pepmsc.ll pepcmd.ll pepesc.ll pepini.ll pepato.ll pephlp.ll pretty.ll trace.ll debug.ll sortl.ll impr.ll virv24.ll loader.ll oblist.ll
+
+

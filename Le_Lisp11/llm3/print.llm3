@@ -1,0 +1,833 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :  les fonctions de sortie
+*
+****************************************************************
+*
+*                Jerome CHAILLOUX  (Chailloux.Vlsi)
+*                           I.N.R.I.A.
+*                Domaine de Voluceau,  Rocquencourt
+*                B.P. 105,   78153 Le Chesnay Cedex
+*                tel : (1) 954 90 20      poste 456
+*
+*****************************************************************
+ 
+ 
+          TITRE     PRINT       LLM3 : les impressions standards.
+ 
+          XREF      BUILDAT,CSYMB                 pour MAKFNT
+          XREF      .UNDEF,.T,.VOID,.QUOTE
+          XREF      GC                            pour CONS
+          XREF      MSTACK,ERRFS                  pour CHKSTK
+ 
+          XREF      ERRNAA,ERRNNA,ERRNLA,ERRNVA,ERRNCA,ERROOB
+          XREF      GETPNAM
+          XREF      OSTREAM
+          XREF      EVAL,EVALCAR,APPLY,ITSOFT,LIST
+ 
+          XDEF      INI_PRINT,PROBJ,PROBJT,FULLIN
+          XDEF      PRATOM,OUTCH,OUTSP,NBLEFT
+          XDEF      OBASE                         pour LLVSDOS
+ 
+
+*
+*         Donnees des fonctions de sortie
+*         ===============================
+*
+ 
+          IMPURE
+ 
+ 
+MAXBUFOUT EQU       256
+ 
+BUFOUT    DSBYTE    MAXBUFOUT     tampon de sortie d'une ligne
+BUFPN     DSBYTE    MAXBUFOUT     tampon d'un p-name
+*
+OBASE     ADR       0         base de conversion en sortie
+*
+PRMDP     ADR       0         profondeur maximum d'impression (100)
+PRCDP     ADR       0         profondeur courante d'impression
+*
+PRMLP     ADR       0         nb de ligne maximum d'impression (2000)
+PRCLP     ADR       0         nb courant de lignes imprimees
+*
+PRMLN     ADR       0         longeur maximum d'impression (2000)
+PRCLN     ADR       0         longeur courante d'impression
+*
+SPRINT    ADR       0         SP au debut de PROBJ
+POCOUR    ADR       0         index courant sur BUFOUT
+NBLEFT    ADR       0         longeur de la marge gauche (0)
+NBRIG     ADR       0         longeur de la ligne (78)
+ 
+*
+*          Donnees de la fonction EXPLODE
+*
+ 
+IEXPLD    ADR         0       indicateur EXPLODE
+LEXPLD    ADR         0       liste en formation
+ 
+
+
+          PURE
+ 
+*
+*         Initialise l'imprimeur
+*         ======================
+*
+ 
+ 
+INI_PRINT EQU       *
+          MOVNIL    IEXPLD              raz indicateur EXPLODE
+          MOV       #10,OBASE           base en sortie
+          MOV       #0100,PRMDP         init profondeur max du PRINT
+          MOV       #2000,PRMLP         init max line du PRINT
+          MOV       #2000,PRMLN         init longeur max du PRINT
+          MOV       #0,POCOUR           position en debut de ligne
+          MOV       #0,NBLEFT           init marge gauche
+          MOV       #78,NBRIG           init marge droite
+          MOV       #MAXBUFOUT,A1       raz index
+          BRA.S     PRII2
+PRII1     MOVBX     #$20,BUFOUT,A1      force un espace
+PRII2     SOBGEZ    A1,PRII1
+ 
+*                                       Creation des symboles
+          NOLIST
+          MAKFNT    EOL,0,.VOID,3,'EOL'
+          MAKFNT    FFLUSH,0,.VOID,5,'FLUSH'
+          MAKFNT    PRIN,0,.VOID,4,'PRIN'
+          MAKFNT    PRINT,0,.VOID,5,'PRINT'
+          MAKFNT    PRINFLUSH,0,.VOID,9,'PRINFLUSH'
+          MAKFNT    TERPRI,0,.VOID,6,'TERPRI'
+          MAKFNT    PRINLP,0,.VOID,6,'PRINLP'
+          MAKFNT    PRINCH,0,.VOID,6,'PRINCH'
+          MAKFNT    PRINCOD,0,.VOID,6,'PRINCN'
+          MAKFNT    SPACES,0,.VOID,6,'SPACES'
+          MAKFNT    PLENGTH,0,.VOID,7,'PLENGTH'
+          MAKFNT    FPTYPE,0,.VOID,5,'PTYPE'
+          MAKFNT    PRLINE,0,.VOID,9,'PRINTLINE'
+          MAKFNT    PRLEVEL,0,.VOID,10,'PRINTLEVEL'
+          MAKFNT    PRLENGTH,0,.VOID,11,'PRINTLENGTH'
+          MAKFNT    FOBASE,0,.VOID,5,'OBASE'
+          MAKFNT    LMARGIN,0,.VOID,7,'LMARGIN'
+          MAKFNT    RMARGIN,0,.VOID,7,'RMARGIN'
+          MAKFNT    OUTPOS,0,.VOID,6,'OUTPOS'
+          MAKFNT    OUTBUF,0,.VOID,6,'OUTBUF'
+          MAKFNT    EXPLODE,0,.VOID,7,'EXPLODE'
+          MAKCST    STATPR,0,.VOID,12,'STATUS-PRINT'
+          MAKCST    STATPC,0,.VOID,17,'STATUS-PRINT-CASE'
+*!!!      LIST
+ 
+          MOV       .STATPR,A1          symbole STATUS-PRINT
+          MOVNIL    CVAL(A1)
+          MOV       .STATPC,A1          symbole STATUS-PRINT-CASE
+          MOVNIL    CVAL(A1)
+ 
+FALSE     MOVNIL    A1
+POPJ      RETURN
+ 
+TRUE      MOV       .T,A1
+          RETURN
+ 
+*
+*         Les points d'entree normaux de l'imprimeur
+*         U_PRINT : impression du registre A1
+*
+ 
+          XDEF      U_PRINT
+U_PRINT   EQU       *
+          CALL      PROBJ               actuellement
+          CALL      FULLIN
+          RETURN
+ 
+*
+*         FULLIN : appelle l'IT Soft : EOL si la ligne deborde
+*         toujours appellee en interne! jamais de OUTLIN direct.
+*
+ 
+FULLIN    EQU       *
+          PUSH      A1                  sauve tous les registres
+          PUSH      A2                  encore
+          PUSH      A3                  encore
+          PUSH      A4                  et encore
+          MOV       .EOL,A1             nom de l'IT Soft
+          MOVNIL    A2                  sans argument
+          CALL      ITSOFT              appel IT
+          POP       A4                  restaure les registres
+          POP       A3                  encore
+          POP       A2                  encore
+          POP       A1                  et encore.
+          RETURN
+ 
+*
+*          (EOL) SUBR0  equivalent a (TERPRI)
+*          mais est appelee par IT Soft
+*
+ 
+*----------------------------------------
+          FENTRY    EOL,SUBR0
+*----------------------------------------
+          CALL.S    OUTLIN              vide la ligne
+          MOVNIL    A1                  retourne toujours NIL
+          RETURN
+ 
+ 
+*
+*         FLUSH : fonction qui vide le buffer
+*
+*----------------------------------------
+          FENTRY    FFLUSH,SUBR0
+*----------------------------------------
+          CBEQ      POCOUR,#0,TRUE      rien a imprimer
+          OUTF      OSTREAM,BUFOUT,A1,A2 on imprime
+*?!?!? a tester A2
+          MOV       POCOUR,A2           pour razer le buffer
+          BRA.S     FFLUSH2
+FFLUSH1   MOVBX     #$20,BUFOUT,A2      y force un espace
+FFLUSH2   SOBGEZ    A2,FFLUSH1          A2 fois.
+          MOV       NBLEFT,POCOUR       init marge gauche
+          BRA       TRUE                et retourne toujours T.
+ 
+ 
+*
+*         Routines de base
+*         ================
+*
+*
+*          OUTLIN : vide le tampon de sortie
+*          et change de ligne
+*
+ 
+OUTLIN    EQU       *
+          BFNIL     IEXPLD,EXPLS        je suis dans un EXPLODE
+          MOV       POCOUR,A1           index de sortie (taille du tampon)
+          BFNIL.S   OSTREAM,OUTLI1      pas RC/LF si fichier
+          MOVBX     #13,BUFOUT,A1       force un 'rc'
+          INCR      A1
+          MOVBX     #10,BUFOUT,A1       force 'lf'
+          INCR      A1
+          MOV       A1,POCOUR           pour la RAZ
+          TTYOUT    A1,BUFOUT,A2        sort le buffer sur TTY.
+          BRA.S     OUTLI2              apres c'est pareil
+OUTLI1    OUTF      OSTREAM,BUFOUT,A1,A2
+*?!?!     il faut tester A2
+OUTLI2    MOV       POCOUR,A2           index pour la remise a espace
+          BRA.S     OUTLI4
+OUTLI3    MOVBX     #$20,BUFOUT,A2      raz le tampon
+OUTLI4    SOBGEZ    A2,OUTLI3           A2 fois.
+          MOV       NBLEFT,POCOUR       init pointeur courant
+          INCR      PRCLP               compteur nb de lignes max
+          MOV       PRCLP,A2            pour realiser la comparaison
+          BFEQ.S    A2,PRMLP,OUTLRET    il en reste.
+          SSTACK    SPRINT              retour TRES rapide
+          BRA       PROBJE              de PROBJ
+OUTLRET   RETURN
+ 
+*
+*          OUTCH : suppose dans A4 un caractere, le depose dans
+*          le tampon de sortie  et actualise le pointeur courant
+*
+ 
+OUTCH     EQU       *
+          BFNIL     IEXPLD,EXPLCH       on est dans EXPLODE
+          PUSH      A1                  clean clean
+          MOV       POCOUR,A1           pour realiser la comparaison
+          CBLT.S    A1,NBRIG,OUTCH1     la ligne est pleine ?
+          CALL      FULLIN              oui : on vide.
+OUTCH1    MOVBX     A4,BUFOUT,A1        charge le caractere
+          INCR      POCOUR              actualise l'index
+          POP       A1                  tout est propre
+          RETURN
+ 
+*
+*          OUTSP : edite un espace si c'est possible
+*          sinon change de ligne
+*
+ 
+OUTSP     EQU       *
+          BFNIL     IEXPLD,EXPLS        je suis dans EXPLODE
+          PUSH      A1                  clean clean
+          MOV       POCOUR,A1           pour realiser la comparaison
+          CBGE.S    A1,NBRIG,OUTSP1     la ligne est pleine.
+          MOVBX     #$20,BUFOUT,A1      charge un espace
+          INCR      POCOUR              actualise le pointeur courant
+          POP       A1                  tout est propre.
+          RETURN    *                   et c'est tout
+OUTSP1    CALL      FULLIN              vide la ligne simplement
+          POP       A1                  comme avant
+          RETURN    *
+ 
+*
+*          PRATOM : edite l'atome dans A1
+*          change de ligne si l'atome ne rentre pas dans la ligne
+ 
+ 
+PRATOM    EQU       *
+          BTNUMB.S  A1,PRAT0            simple pour les nombres ...
+          BTSTRG    A1,PRSTRG           pour le cas des chaines.
+          BTSPTYPE  A1,PRSPEC           pour les symboles speciaux.
+PRAT0     PNAM      A3,BUFPN            A3 <- plen, BUFPN <- pname
+          PUSH      A3                  on sauve le PLEN
+          PLUS      POCOUR,A3           calcul la nouvelle taille
+          CBLE.S    A3,NBRIG,PRAT1      ca rentre pas
+          CALL      FULLIN              alors on vide la ligne.
+PRAT1     POP       A3                  restaure le plength
+          MOV       #0,A2               raz index
+          PUSH      A1                  sauve la valeur a retourner
+          MOV       .STATPC,A1          le symbole  STATUS-PRINT-CASE
+          MOV       CVAL(A1),A1
+          BRA.S     PRAT4               ca roule
+PRAT2     XMOVB     A2,BUFPN,A4         edite 1 caractere
+          BTNIL.S   A1,PRAT3            je ne touche pas a la casse
+          LWCASE    A4                  conversion MAJ -> min
+PRAT3     CALL      OUTCH
+          INCR      A2                  actualise l'index
+PRAT4     SOBGEZ    A3,PRAT2            il reste des caracteres.
+          POP       A1                  la valeur de l'atome
+          RETURN    *                   c'est fini
+ 
+*         Edition d'une chaine de caracteres
+ 
+PRSTRG    EQU       *
+          PUSH      A1                  valeur a retourner
+          MOV       (A1),A1             A1 <- le symbole de la chaine
+          MOV       .STATPR,A2          test de STATUS-PRINT
+          MOV       CVAL(A2),A2         la valeur de STATUS-PRINT
+          BFNIL     A2,PRSTR0           une vraie chaine.
+          CALL      PRAT0               edition comme un symbole
+          POP       A1                  le vrai pointeur vers la chaine.
+          RETURN     *
+PRSTR0    PNAM      A3,BUFPN            A3 <- plen, BUFPN <- pname
+          PUSH      A3                  le temps de faire le calcul!
+          PLUS      POCOUR,A3           calcul la nouvelle taille
+          PLUS      #2,A3               pour les ""
+          CBLE.S    A3,NBRIG,PRSTR1     ca rentre
+          CALL      FULLIN              ca ne rentre pas.
+PRSTR1    POP       A3                  le p-length
+          MOV       #34,A4              le cod ASCII de "
+          CALL      OUTCH
+          MOV       #0,A2               raz index
+          BRA.S     PRSTR4              ca roule
+PRSTR3    XMOVB     A2,BUFPN,A4         edite 1 caractere
+          CALL      OUTCH
+          INCR      A2                  actualise l'index
+PRSTR4    SOBGEZ    A3,PRSTR3           il reste des caracteres.
+          MOV       #34,A4              idem
+          CALL      OUTCH               le 2eme ""
+          POP       A1                  le pointeur sur la chaine
+          RETURN    *
+ 
+*         Edition d'u symbole special
+ 
+PRSPEC    EQU       *
+          MOV       .STATPR,A2          test de STATUS-PRINT
+          MOV       CVAL(A2),A2         la valeur de STATUS-PRINT
+          BTNIL     A2,PRAT0            alors c'est comme un symbole
+          PNAM      A3,BUFPN            A3 <- plen, BUFPN <- pname
+          PUSH      A3                  le temps de faire le calcul!
+          PLUS      POCOUR,A3           calcul la nouvelle taille
+          PLUS      #2,A3               pour les ""
+          CBLE.S    A3,NBRIG,PRSPC1     ca rentre
+          CALL      FULLIN              ca ne rentre pas.
+PRSPC1    POP       A3                  le p-length
+          MOV       #124,A4             le code ASCII de |
+          CALL      OUTCH
+          MOV       #0,A2               raz index
+          BRA.S     PRSPC4              ca roule
+PRSPC3    XMOVB     A2,BUFPN,A4         edite 1 caractere
+          CALL      OUTCH
+          INCR      A2                  actualise l'index
+PRSPC4    SOBGEZ    A3,PRSPC3           il reste des caracteres.
+          MOV       #124,A4             idem
+          BRA       OUTCH               et c'est tout.
+ 
+ 
+*
+*         Impression standard
+*         ===================
+*
+ 
+*
+*           PROBJ : fonction  d'impression interne de A1
+*
+ 
+PROBJ     EQU       *
+          PUSH      A1                  sauve la valeur a editer
+          STACK     SPRINT              pour un retour rapide
+          MOV       #0,PRCLP            init nb delignes
+          MOV       #0,PRCLN            init la longeur courante
+          MOV       #0,PRCDP            init la profondeur courante
+          CALL.S    PROBJ0              et on imprime
+*                                       en cas de retour subit
+PROBJE    EQU       *
+          POP       A1                  ramene en valeur l'objet edite
+          RETURN
+ 
+*
+ 
+PROBJ0    BFCONS    A1,PRATOM           c'est tout pour les atomes
+          INCR      PRCDP               actualise la prof courante
+          MOV       PRCDP,A2            pour realiser la comparaison
+          CBLE.S    A2,PRMDP,PROBJ2     ca tient
+          MOV       #$26,A4             si ca tient pas envoie
+          BRA       OUTCH               un &
+*
+PROBJ2    MOV       CAR(A1),A2          recupere le 1er element de la liste
+          BFEQ.S    A2,.QUOTE,PROBJ5    c'est pas '
+          MOV       CDR(A1),A2          (larg)
+          MOV       CDR(A2),A3          Ce n'est pas la fonction QUOTE
+          MOV       #$27,A4             imprime le caractere '
+          CALL      OUTCH
+          MOV       CAR(A2),A1          A1 <- l'argument de la fonction '
+          BRA.S     PROBJ0              vers son impression
+*
+PROBJ5    MOV       #$28,A4             debut de liste
+          CALL      OUTCH               on l'envoie
+          BRA.S     PROBJ7              vers la suite des elements
+*
+PROBJ6    CALL      OUTSP               separateur d'element de liste
+PROBJ7    INCR      PRCLN               actualise la longeur courante
+          MOV       PRCLN,A2            pour realiser la comparaison
+          CBLE.S    A2,PRMLN,PROBJ8     c'est tout bon
+          PUSHAD    PROBJ9              super JRST hack
+          CALL.S    PROBJD              edite 3 points de suspension
+          NOP                           a ne pas enlever!
+PROBJD    MOV       #$2E,A4             sort 1 .
+          BRA       OUTCH
+*
+PROBJ8    CHKSTK    MSTACK,ERRFS        des fois que ca boucle ...
+          PUSH      CDR(A1)             sauve le reste de la liste
+          MOV       CAR(A1),A1          element suivant
+          CALL      PROBJ0              on l'edite
+          POP       A1                  recupere le reste des elements
+          BTCONS    A1,PROBJ6           la liste continue
+          BTNIL.S   A1,PROBJ9           c'est une belle fin
+          CALL      OUTSP               espace devant .
+          CALL      PROBJD              sort un .
+          CALL      OUTSP               encore un espace
+          CALL      PRATOM              sort le dernier CDR
+PROBJ9    MOV       #$29,A4             sort une )
+          CALL      OUTCH
+          DECR      PRCDP               actualise la profondeur courante
+          RETURN
+ 
+ 
+*
+*          PROBJT : imprime A1 et change de ligne
+*
+ 
+PROBJT    EQU       *
+          PUSHAD    FULLIN              vide la ligne ensuite
+          BRA       PROBJ               et imprime l'objet
+ 
+ 
+ 
+*
+*         Fonctions de sortie standards
+*         =============================
+*
+*
+*         (PRIN e1 ... eN)   SUBRVN/SUBRN
+*         a tansformer vraiment en SUBRVN
+*
+*----------------------------------------
+          FENTRY    PRIN,SUBRVN
+*----------------------------------------
+          BTEQ      A4,#0,FALSE         rien a imprimer (PRIN)
+          BFEQ.S    A4,#1,PRIN10        s'il y a plusieurs arguments
+          POP       A1                  recupere la chose a imprimer
+          BRA       PROBJ               et on l'edite!
+PRIN10    PUSH      A4                  sauve le compteur pour ADJSTK
+          DECR      A4
+PRIN11    XSPMOV    A4,A1               argument suivant
+          PUSH      A4                  sauve le compteur
+          CALL      PROBJ               on edite
+          POP       A4                  courrant
+          SOBGEZ    A4,PRIN11           ca roule
+          ADJSTK    *                   enleve le block
+          RETURN    *
+ 
+*
+*          (PRINT e1 ... eN)   SUBRVN
+*
+*----------------------------------------
+          FENTRY    PRINT,SUBRVN
+*----------------------------------------
+          BFEQ.S    A4,#0,PRINT10       rien a imprimer = TERPRI
+          CALL      FULLIN              et on vide tout.
+          BRA       FALSE               et retourne NIL
+PRINT10   PUSH      A4                  sauve le compteur pour ADJSTK
+          DECR      A4
+PRINT11   XSPMOV    A4,A1               argument suivant
+          PUSH      A4                  sauve le compteur
+          CALL      PROBJ               on edite
+          POP       A4                  courrant
+          SOBGEZ    A4,PRINT11          ca roule
+          PUSH      A1                  sauve la valeur de retour
+          CALL      FULLIN              puis vide la ligne
+          POP       A1                  recupere la valeur de retour
+          ADJSTK    *                   enleve le block
+          RETURN    *
+ 
+ 
+*
+*         (PRINFLUSH e1 ... eN)   SUBRVN
+*
+*----------------------------------------
+          FENTRY    PRINFLUSH,SUBRVN
+*----------------------------------------
+          BFEQ.S    A4,#0,PRINF10       rien a imprimer = FLUSH
+          CALL      FFLUSH
+          BRA       FALSE               retourne NIL
+PRINF10   PUSH      A4                  sauve le compteur pour ADJSTK
+          DECR      A4
+PRINF11   XSPMOV    A4,A1               argument suivant
+          PUSH      A4                  sauve le compteur
+          CALL      PROBJ               on edite
+          POP       A4                  courrant
+          SOBGEZ    A4,PRINF11          ca roule
+          PUSH      A1                  sauve la valeur de retour
+          CALL      FFLUSH              et on flush le tout.
+          POP       A1                  recupere la valeur de retour
+          ADJSTK    *                   enleve le block
+          RETURN    *
+ 
+*
+*         (PRINLP l)   SUBR1  edite une ligne packee! [cf Emacs]
+*
+*----------------------------------------
+          FENTRY    PRINLP,SUBR1
+*----------------------------------------
+          BFCONS    A1,POPJ             bizarre ...
+          PUSH      CDR(A1)             sauve la liste packee
+          MOV       CAR(A1),A1          le nb d'espaces
+          CALL      SPACES
+          BRA.S     PRINLP3             en avant
+PRINLP1   PUSH      CDR(A1)             sauve le reste de la liste packee
+          MOV       CAR(A1),A2          l'element suivant
+          LBYTE     A2,A4,PRINLP2       octet gauche
+          PUSH      A2                  sauve le couple pour le droite
+          CALL      OUTCH
+          POP       A2                  recup le couple
+PRINLP2   RBYTE     A2,A4,PRINLP3       octet droit
+          CALL      OUTCH
+PRINLP3   POP       A1                  le reste de la liste packee
+          BTCONS    A1,PRINLP1          encore
+          BRA       TRUE                qvqf ?
+ 
+*
+*          (TERPRI n)   SUBR1
+*
+*----------------------------------------
+          FENTRY    TERPRI,SUBRV1
+*----------------------------------------
+ 
+          BTNUMB.S  A1,TERPR2           il y a un argument numerique
+          MOV       #1,A1               sinon n=1 par defaut
+          BRA.S     TERPR2              puis au travail.
+TERPR1    CALL      FULLIN              vide la ligne
+TERPR2    SOBGEZ    A1,TERPR1           il en faut encore
+          BRA       TRUE                et retourne toujours T (pas -1!!)
+ 
+*
+*          (PRINCH c n)   SUBR2
+*
+*----------------------------------------
+          FENTRY    PRINCH,SUBRV2
+*----------------------------------------
+          BTCONS.S  A1,PRINCE           c'est une erreur!
+          PUSH      A1                  sera la valeur de retour.
+          PNAM      A1,BUFPN            pname(A1) -> BUFPN
+          MOV       #0,A3               l'index doit etre un registe (Byte)
+          XMOVB     A3,BUFPN,A4         pour OUTCH
+          BTNUMB.S  A2,PRINC2           il y a un 2eme arg numerique
+          MOV       #1,A2               sinon n=1 par defaut
+          BRA.S     PRINC2              et ca roule.
+PRINC1    PUSH      A2                  sauve le compteur
+          CALL      OUTCH               envoyer le caractere
+          POP       A2                  restaure le compteur
+PRINC2    SOBGEZ    A2,PRINC1           pour n
+          POP       A1                  retourne le caractere
+          RETURN
+PRINCE    MOV       .PRINCH,A2          nom de la fonction
+          BRA       ERRNCA              ce doit etre un  caractere.
+ 
+ 
+*
+*         (PRINCN n)   SUBR1   sort un code ASCII
+*
+*----------------------------------------
+          FENTRY    PRINCOD,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,PRINCODE         un ASCII c'est un nb non ?
+          MOV       A1,A4               pret pour OUTCH
+          PUSH      A1                  sauve la valeur de retour
+          CALL      OUTCH               on le sort
+          POP       A1                  recup la valeur de retour
+          RETURN    *
+PRINCODE  MOV       .PRINCOD,A2         nom de la fonction
+          BRA       ERRNNA              ce devait etre un nb!
+ 
+ 
+*
+*         (SPACES n)   SUBR1   charge des espaces dans le tampon
+*
+*----------------------------------------
+          FENTRY    SPACES,SUBR1
+*----------------------------------------
+          MOV       #$20,A4             espace (pour OUTCH)
+          BTNUMB.S  A1,SPACE1           un nombre est fourni
+          BFNIL.S   A1,SPACERR          il faut NIL ou un nb !
+          MOV       #1,A1               n=() => n=1  bravo!
+SPACE1    PUSH      A1                  sauve la valeur de retour (le nb)
+          BRA.S     SPACE3              et on y va.
+SPACE2    PUSH      A1                  sauve le compteur
+          CALL      OUTCH               on imprime
+          POP       A1                  recup le compteur
+SPACE3    SOBGEZ    A1,SPACE2           pour n
+          POP       A1                  recup la valeur de retour
+          RETURN    *                   et c'est fini!
+SPACERR   MOV       .SPACES,A2          nom de la fonction
+          BRA       ERRNNA              l'argument devait etre un nb!
+ 
+ 
+*
+*         Autres fonctions standards de sortie
+*         ====================================
+*
+ 
+*
+*         (PLENGTH at) ramene le nombre de caracteres
+*         du P-NAME de l'atome at qui peut etre :
+*         un symbole, un nombre ou une chaine.
+*         On ne compte ni les guillemets, ni les barres
+*         de valeur absolue.
+*
+*----------------------------------------
+          FENTRY    PLENGTH,SUBR1
+*----------------------------------------
+          BTCONS    A1,PLENGER          il faut un atome (ou nb ou chaine)
+          PNAM      A1,BUFPN            plength(A1) -> A1
+          RETURN    *                   c'est tout.
+PLENGER   MOV       .PLENGTH,A2         le nom de la fonction
+          BRA       ERRNAA
+ 
+*
+*         (PTYPE at n)   SUBR2
+*         SET/GET le print-type de at
+*
+*----------------------------------------
+          FENTRY    FPTYPE,SUBRV2
+*----------------------------------------
+          BFSYMB.S  A1,PTYPER1          il faut un symbole.
+          BTNIL.S   A2,PTYP1            pas de 2eme arg
+          BFNUMB.S  A2,PTYPER2          il faut un nb.
+          SPTYPE    A2,A1               force le p-type
+PTYP1     GPTYPE    A1,A1               retourne le p-type courant
+          RETURN
+PTYPER1   MOV       .FPTYPE,A2          nom de la fonction en erreur
+          BRA       ERRNAA              il faut un symbole.
+PTYPER2   MOV       A2,A1               l'argument erronne
+          MOV       .FPTYPE,A2          nom de la fonction en erreur
+          BRA       ERRNNA              il faut un nb.
+ 
+*
+*         Les variables-fonctions de l'impression
+*         =======================================
+*
+ 
+*
+*         (OBASE n)           regle la base en sortie
+*
+*----------------------------------------
+          FENTRY    FOBASE,SUBRV1
+*----------------------------------------
+          BTNIL.S   A1,FOBASE1          le GET
+          BTNUMB.S  A1,FOBASE0
+          MOV       .FOBASE,A2          le nom de la fonction
+          BRA       ERRNNA              il fallait un nb!
+FOBASE0   CBLE.S    A1,#0,FOBASE3       c'est negatif!
+          CBGT.S    A1,#32,FOBASE3      base jusqu'a 32
+          MOV       A1,OBASE            even paranoid people ....
+FOBASE1   MOV       OBASE,A1            le GET
+          RETURN    *
+FOBASE3   MOV       .FOBASE,A2          le nom de la fonction
+          BRA       ERROOB              out of bound
+ 
+*
+*          (PRINTLINE n)   regle le nb de lignes maximum d'impression
+*
+*----------------------------------------
+          FENTRY    PRLINE,SUBRV1
+*----------------------------------------
+          BTNIL.S   A1,PRINTN1          il n'y a pas d'argument
+          BTNUMB.S  A1,PRINTN0          c'est ok
+          MOV       .PRLINE,A2          le nom de la fonction en erreur
+          BRA       ERRNNA              il fallait un nb.
+PRINTN0   MOV       A1,PRMLP            change la profondeur maximum
+PRINTN1   MOV       PRMLP,A1            retourne la prof courante
+          RETURN
+ 
+*
+*          (PRINTLEVEL n)   regle la profondeur maximum d'impression
+*
+*----------------------------------------
+          FENTRY    PRLEVEL,SUBRV1
+*----------------------------------------
+          BTNIL.S   A1,PRINTL1          il n'y a pas d'argument
+          BTNUMB.S  A1,PRINTL0          c'est ok.
+          MOV       .PRLEVEL,A2         nom de la fonction en erreur
+          BRA       ERRNNA              il fallait un nb.
+PRINTL0   MOV       A1,PRMDP            change la profondeur maximum
+PRINTL1   MOV       PRMDP,A1            retourne la prof max
+          RETURN
+ 
+*
+*          (PRINTLENGTH n)   regle la longeur maximum d'impression
+*
+*----------------------------------------
+          FENTRY    PRLENGTH,SUBRV1
+*----------------------------------------
+          BTNIL.S   A1,PRINTG1          il n'y a pas d'argument
+          BTNUMB.S  A1,PRINTG0          c'est ok.
+          MOV       .PRLENGTH,A2        nom de la fonction en erreur
+          BRA       ERRNNA              il fallait un nb.
+PRINTG0   MOV       A1,PRMLN            change la long max
+PRINTG1   MOV       PRMLN,A1            retourne la long max
+          RETURN
+ 
+ 
+*
+*         Fonctions sur le tampon de sortie
+*         =================================
+*
+*
+*         S.P. TESPOS : teste si la position A1 reste bien
+*               a l'interieur de la ligne
+*         A4 <- le nom de la fonction qui appelle
+*
+ 
+TESPOS    BFNUMB.S  A1,POSER2           ce doit etre un nombre
+          CBLT.S    A1,#0,POSER         qui plus est positif
+          CBLE      A1,NBRIG,POPJ       et plus petit que NBRIG
+POSER     MOV       A4,A2               nom dans A2 si erreur
+          BRA       ERROOB              vers les erreurs standards
+POSER2    MOV       A4,A2               le nom de la fonction en erreur
+          BRA       ERRNNA              il fallait un nb.
+ 
+*
+*          (LMARGIN n) regle la marge gauche
+*
+*----------------------------------------
+          FENTRY    LMARGIN,SUBRV1
+*----------------------------------------
+          BTNIL.S   A1,LMARG1           pas d'argument
+          MOV       .LMARGIN,A4         en cas d'erreur
+          CALL      TESPOS              teste la validite de l'argument
+          MOV       A1,NBLEFT           change la taille de la marge gauche
+LMARG1    MOV       NBLEFT,A1           retourne la taille courante
+          RETURN
+ 
+*
+*          (RMARGIN n) regle la marge droite
+*
+*----------------------------------------
+          FENTRY    RMARGIN,SUBRV1
+*----------------------------------------
+          BTNIL.S   A1,RMARG1           il n'y a pas d'argument
+          MOV       .RMARGIN,A4         nom de la fonction en cas d'erreur
+          BFNUMB    A1,POSER            ce doit etre un nombre
+          CBLT      A1,#0,POSER         qui plus est positif
+          CBGT      A1,#132,POSER       et plus petit que 132
+          MOV       A1,NBRIG            change la taille de la marge droite.
+RMARG1    MOV       NBRIG,A1            retourne la marge droite courante
+          RETURN
+ 
+ 
+*
+*          (OUTPOS n) regle la position courante
+*
+*----------------------------------------
+          FENTRY    OUTPOS,SUBRV1
+*----------------------------------------
+          BTNIL.S   A1,OUTPO1           il n'y a pas d'argument
+          MOV       .OUTPOS,A4          nom de la fonction pour TESPOS
+          CALL      TESPOS              teste la validite de l'argument
+          MOV       A1,POCOUR           change la position courante
+OUTPO1    MOV       POCOUR,A1           retourne la position courante
+          RETURN
+ 
+ 
+*
+*         (OUTBUF ni nc)   accede/charge directement le tampon
+*         ni = index, nc = code (optionnel)
+*
+*----------------------------------------
+          FENTRY    OUTBUF,SUBRV2
+*----------------------------------------
+          MOV       .OUTBUF,A4          nom de la fonction si erreur de TESPOS
+          CALL      TESPOS              on sort du buffer ?
+          BTNIL.S   A2,OUTBU1           pas de 2eme argument
+          BFNUMB.S  A2,OUTBUER          il faut un CARACTERE
+          MOVBX     A2,BUFOUT,A1        force ce caractere
+OUTBU1    XMOVB     A1,BUFOUT,A1        recup ce caractere
+          RETURN
+OUTBUER   MOV       A2,A1               l'argument erronne
+          MOV       A4,A2               le nom de la fonction
+          BRA       ERRNNA              il fallait un nombre comme 2eme arg.
+ 
+ 
+*
+*         Fonction EXPLODE
+*         ================
+*
+*
+*          Utilise les memes routines que les
+*          fonctions standards de sortie
+*
+*----------------------------------------
+          FENTRY    EXPLODE,SUBR1
+*----------------------------------------
+          MOVNIL    A2                  prepare la liste resultat
+          NCONS     A2                  fabrique le 1er doublet
+          PUSH      A2                  sauve pour le GC et le retour
+          MOV       A2,LEXPLD           liste courante en formation
+          MOV       .T,IEXPLD           indicateur EXPLODE = vrai
+          CALL      PROBJ               explosion de l'objet
+          MOVNIL    IEXPLD              indicateur EXPLODE = faux
+          POP       A1                  recup la liste
+          MOV       CDR(A1),A1          enleve le crochet
+          RETURN
+ 
+ 
+*
+*          Rajoute un espace a la liste des caracteres
+*
+ 
+EXPLS     PUSH      A1                  Registres de travail
+          PUSH      A2
+          MOV       #$20,A1             Tout changement de ligne est
+EXPLS1    NCONS     A1                  transforme en espace
+          MOV       LEXPLD,A2           recupere la liste courante
+          MOV       A1,CDR(A2)          rajoute l'element en queue
+          MOV       A1,LEXPLD           nouvelle queue
+          POP       A2                  restaure les registres de travail
+          POP       A1
+          RETURN    *                   et rentre
+ 
+*
+*          Rajoute le caractere A4 dans la liste EXPLODE
+*
+ 
+EXPLCH    PUSH      A4                  sauve le caractere
+          PUSH      A2                  pour travailler
+          NCONS     A4                  transforme en espace
+          MOV       LEXPLD,A2           recupere la liste courante
+          MOV       A4,CDR(A2)          rajoute l'element en queue
+          MOV       A4,LEXPLD           nouvelle queue
+          POP       A2                  restaure les registres de travail
+          POP       A4
+          RETURN    *                   et rentre
+ 
+ 
+          END
+ 

@@ -1,0 +1,27 @@
+=/*************************************************************************
+=/*
+=/*    Assemblage et Link Complet du systeme Le_Lisp sous systeme VERSAdos
+=/*
+=/*		LL.LL68K.SA	racine commune a tous les systemes
+=/*		LL.LL68KVD.SA	modules VERSAdos
+=/*		LL.L68KV.SA	initialisation Le_Lisp
+=/*
+=/*************************************************************************
+=time
+=/* @ llasm llvsdos
+=/* @ llasm llinit
+=/@ llasm	toperr
+=/@ llasm	gc
+=/@ llasm	physio
+=/@ llasm	read
+=/@ llasm	print
+=/@ llasm	eval
+=/@ llasm	cntrl
+=/@ llasm	carcdr
+=/@ llasm	fntsd
+=/@ llasm	nbstrs
+=/@ llasm	bllsht
+
+=/@ llinkvd
+
+

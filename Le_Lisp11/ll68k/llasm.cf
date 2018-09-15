@@ -1,0 +1,64 @@
+=/*************************************************************
+=/*
+=/*	Assemblage d'un module Le_Lisp 68K simple
+=/*	suivi optionnellement d'une edition de liens.
+=/*
+=/*	ex :  =chain llasm foo[,vd|md|vm]
+=/*************************************************************
+=/*
+=/ifc \1
+=/abt Il faut un nom de module
+=/endif
+=time
+=/ifeq "LLVSDOS"\1
+=asm condit/macros/llvsdos/rtllm3,llvsdos,llvsdos;z=50
+=/endif
+=/ifeq "LLINIT"\1
+=asm condit/macros/\1,\1,\1;z=50
+=/endif
+=/ifeq "TOPERR"\1
+=asm condit/macros/\1,\1,\1;z=50
+=/endif
+=/ifeq "GC"\1
+=asm condit/macros/macgc/\1,\1,\1;z=50
+=/endif
+=/ifeq "PHYSIO"\1
+=asm condit/macros/macio/\1,\1,\1;z=50
+=/endif
+=/ifeq "READ"\1
+=asm condit/macros/\1,\1,\1;z=50
+=/endif
+=/ifeq "PRINT"\1
+=asm condit/macros/macio/\1,\1,\1;z=50
+=/endif
+=/ifeq "EVAL"\1
+=asm condit/macros/EVAL1/EVAL2,EVAL,EVAL;z=80
+=/endif
+=/ifeq "CNTRL"\1
+=asm condit/macros/\1,\1,\1;z=50
+=/endif
+=/ifeq "CARCDR"\1
+=asm condit/macros/\1,\1,\1;z=50
+=/endif
+=/ifeq "FNTSD"\1
+=asm condit/macros/FNTSD1/FNTSD2,FNTSD,FNTSD;z=80
+=/endif
+=/ifeq "NBSTRS"\1
+=asm condit/macros/\1,\1,\1;z=50
+=/endif
+=/ifeq "BLLSHT"\1
+=asm condit/macros/\1,\1,\1;z=50
+=/endif
+=/ifeq "VD"\1
+=chain llinkvd
+=/endif
+=/ifeq "SD"\1
+=chain llinksd
+=/endif
+=/ifeq "VM"\1
+=chan llinkvm
+=/endif
+=time
+=/ifs \2
+=chain llink\2
+=/endif

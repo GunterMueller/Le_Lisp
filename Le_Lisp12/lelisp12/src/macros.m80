@@ -1,0 +1,1524 @@
+  	.TITLE	Interprete Le_Lisp 80
+ 
+ 
+;***********************************************;
+;						;
+;          Le_Lisp  80  (de l'INRIA)		;
+;						;
+;***********************************************;
+;						;
+;	    Interprete Le_Lisp pour :		;
+;						;
+;		1  - MDS80 (32K ou 64K)		;
+;		2  - MOSTEK 80			;
+;		3  - TRS80 model I level II	;
+;		4  - SDK80			;
+;		5  - SORCERER			;
+;		6  - IMSAI 8080			;
+;		7  - TRS model II		;
+;		8  - Heathkit 89		;
+;		9  - Machine Leblanc		;
+;		10 - Micral 80 22 G		;
+;		11 - SILZ (eleanor)		;
+;		12 - LOGABAX			;
+;		13 - Micral 90			;
+;						;
+;***********************************************;
+ 
+ 
+	;----------------------------------------
+	;
+	;	JEROME CHAILLOUX
+	;	(C)  1982  1983
+	;
+	;----------------------------------------
+	;
+	;	     I N R I A
+	;	Domaine de Voluceau - Rocquencourt
+	;	B.P. 105   Le Chesnay
+	;	78153 Le Chesnay
+	;	tel: 954 90 20 x 456
+	;
+	;----------------------------------------
+	;
+	;	EMMANUEL SAINT-JAMES
+	;
+	;----------------------------------------
+	;
+	;	L. I. T. P.
+	;	Universite PARIS 6
+	;
+	;----------------------------------------
+ 
+ 
+	.LIST	TOC		; pour la table des matieres.
+ 	.LIST	MB		; binaire des macros.
+	.ENABL	LC		; on garde les bas-de-casses.
+;	.ENABL	TIM		; pour les timimgs
+	.PAGE
+	.SBTTL	Assemblages conditionnels.
+ 
+; 1) type de MAP memoire (1 au choix) SEUL CET INDICATEUR EST OBLIGATOIRE :
+ 
+MDS32=0		; =0 si systeme MDS (defaut de 32K)
+MDS64=0		; =1 si MDS de 64K
+MZ80=0		; =1 si systeme MOSTEK Z80
+TRS80=0 	; =1 si TRS80 avec 8K PROM
+TRC80=0		; =1 si TRS80 cassette et 16K
+TRE80=0 	; =1 si TRS80/TRSDOS et 32k RAM
+TRD80=0		; =0 si TRS80/TRSDOS et 48k RAM
+TRP80=0		; =1 si TRS80/CP/M et 48k RAM
+SDK80=0		; =1 si SDK 80 (de type MOULIN)
+SOR80=0		; =1 si SORCERER 80 (K7)
+SOM80=0		; =1 si SORCERER 80 (CP/M)
+SOK80=0 	; =1 si SORCERER 80 (ROMPACK)
+IMSAI=0 	; =1 si IMSAI 8080 (a la ROB)
+TRSII=0 	; =1 si TRS model II (a la gerard)
+H89CPM=0	; =1 si Heathkit 89 avec CP/M
+Z89CPM=1	; =1 si Heathkit 89 avec CP/M 64k
+H89DOS=0	; =1 si Heathkit 89 avec HDOS
+LEBLAN=0	; =1 si Machine speciale Leblanc
+MICRAL=0	; =1 si MICRAL 80-22 G CP/M 58k
+SILZ=0		; =1 si SILZ (Eleanor)
+LOGAX=0		; =1 si LOGABAX (CP/M)
+MICRAL90=0	; =1 si MICRAL 90 (CP/M) 
+ 
+; 2) le systeme de gestion de fichier
+ 
+ISIS=0		; =1 si systeme MDS
+TRSDOS=0	; =0 si TRSDOS classique
+TRSDS2=0	; =1 si TRSDOS Model II
+TRSCPM=0	; =1 si CP/M sur TRS80
+CPM1=0		; =1 si CP/M 1.4 et  <
+CPM2=0		; =1 si CP/M 2.0 et >
+CPM86=0		; =1 si CP/M 86 
+ 
+; 3) autres assemblages conditionnels :
+ 
+LAP=0		; =0 si le LAP est present.
+ZILOG=0		; =1 si CPU Zilog 80
+I8086=0		; =1 si CPU Intel 8086/8088
+AM9511=0	; =1 si unite arithmetique AM9511
+FLOAT=0		; =1 si il y a des flottants (jamais pour l'instant)
+COLOR=0		; =1 si systeme COLORIX present
+K7=0		; =1 si ya des cassettes
+EDITRS=0	; =1 si ya l'editeur video de type TRS.
+EDISOR=0	; =1 si ya l'editeur video de type SORCERER.
+BIG=0		; =1 si ya vraiment de la place
+ROM=0		; =1 si code en ROM => move zone init
+DDT=0		; =1 si il faut charger le DDT TRS (use $6B = 100 octets)
+TGC=0		; =1 si le GC est trace (use $30 = 50 octets)
+ITEVAL=0	; =1 si il y a les caracteres d'interruptions.
+FRANZ=1		; =1 si les messages d'erreur sont en franzais
+PEDAG=0		; =1 si tests de types frequents
+ 
+; 4) les RSTs optionnels : sont utilises pour gagner de la place!
+ 
+I1RST=0		; =1 si ya au moins 1 RST de disponible
+		; le 1er est reserve au : .UNCNS
+I2RST=0		; =1 si ya au moins 2 RST de disponible
+		; le 2eme est reserve au : CALL ERRMS
+I3RST=0		; =1 si ya au moins 3 RST de disponible
+		; le 3eme est reserve au : CALL PCRLF
+	.PAGE
+	.SBTTL	Map memoire === MDS32 === avec 32k octets
+ 
+     .IFNE MDS32
+FILE=1		; ya u systeme de gestion de fichiers
+ISIS=1		; type de OS
+ROM=1		; on simule une ROM
+ 
+;---------
+;0000
+;		Systeme ISIS 2.3 (12K)
+;2FFF
+;---------
+;3000
+;		Buffers des files I/O (1K)
+;33FF
+;---------
+..DINT=$3400
+;		Interprete LE LISP (7K) sans table initiale
+..FINT=$4FFF
+;---------
+..DSTK=$5000
+;		Buffers de lignes et pile (1K1/2)
+..FSTK=$55FF
+;---------
+..DATO=$5600
+;		Atomes litteraux (4K)
+..FATO=$65FF
+;---------
+..DLST=$6600
+;		Listes (5K1/2)
+..ELST=$7BFF
+;---------
+;7C00
+;		Memoires de travail systeme (RAM 1K)
+;7FFF
+;---------
+ 
+     .ENDC 	; de MDS32
+	.PAGE
+	.SBTTL	Map memoire === MDS64 === avec 64k octets
+ 
+    .IFNE MDS64
+FILE=1		; ya un systeme de gestion de fichiers
+ISIS=1		; et c'est meme ISIS
+BIG=1		; ya beaucoup de place
+ROM=1		; on simule une ROM
+ 
+;--------
+;0000	
+;		Systeme ISIS 2.3  (12K)
+;2FFF
+;--------
+;3000
+;		Buffers des files I/O (1K)
+;37FF
+;--------
+..DINT=$3800
+;		Interprete LE LISP (8K) sans table initiale
+..FINT=$57FF
+;--------
+..DSTK=$5800
+;		Buffers des lignes et pile (6K)
+..FSTK=$6FFF
+;--------
+..DCOD=$7000
+;		Code issu du compilateur (4K)
+..FCOD=$7FFF
+;--------
+..DATO=$8000
+;		Atomes litteraux (11K)
+..FATO=$ABFF
+;--------
+..DLST=$AC00
+;		Listes (20K)
+..FLST=$FBFF
+;--------
+;FC00
+;		Zone de travail systeme (1K)
+;FFFF
+;--------
+ 
+     .ENDC	; de MDS64
+	.PAGE
+	.SBTTL	Map memoire === MZ80  === mostek, 16kRAM et 8kPROM
+ 
+     .IFNE MZ80
+ZILOG=1		; C'est un ZILOG 80
+COLOR=1		; avec le systeme COLORIX
+ROM=1		; c'est en ROM
+ 
+;---------
+..DSTK=$0100
+;		Buffers de lignes et pile (1K3/4)
+..FSTK=$17FF
+;--------
+..DATO=$1800
+;		Atomes litteraux (6K)
+..FATO=$1FFF
+;--------
+..DATO=$2000
+;		Listes (8K)
+..FATO=$3FFF
+;---------
+..DINT=$8000
+;		Interprete LE LISP (8K)  avec table initiale
+..FINT=$9FFF
+;---------
+;E000
+;		DDT 80 (2K)
+;FFFF
+;---------
+ 
+     .ENDC
+	.PAGE
+	.SBTTL	Map memoire === TRS80 === Level 2, 16kRAM et 8kPROM
+ 
+     .IFNE TRS80
+ 
+ITEVAL=1	; on interromp
+ZILOG=1		; C'est un ZILOG 80
+K7=0		; qui a des  cassettes
+EDITRS=1	; et un editeur video de type TRS
+ROM=1		; c'est en ROM
+DDT=0		; SI YA ENCORE DES BUGS.
+ 
+I1RST=1		; ya au - 1 RST
+NB1RST=6	; de numero 6
+AD1RST=$400F	; adresse du JMP
+ 
+I2RST=1		; ya au - 2 RST
+NB2RST=5	; de numero 5
+AD2RST=$400C	; adresse du JMP
+ 
+;--------
+;0000
+;		Systeme TRS 80 et BASIC LEVEL II (12k)
+;43FF
+;--------
+..DSTK=$4400
+;		Buffers des lignes et pile (2K)
+..FSTK=$4BFF
+;--------
+..DECR=$4C00
+;		Memoire de l'editeur (1K)
+..FECR=$4FFF
+;--------
+..DATO=$5000
+;		Atomes litteraux (6K)
+..FATO=$67FF
+;--------
+..DLST=$6800
+;		Listes (6K)
+..FLST=$7FFF
+;--------
+..DINT=$8000
+;		Interprete LE LISP (8K) avec table initiale
+..FINT=$9FFF
+;--------
+ 
+     .ENDC	; de TRS80
+	.PAGE
+	.SBTTL	Map memoire === TRC80 === Level 2, 16kRAM et K7
+ 
+     .IFNE TRC80
+ZILOG=1		; C'est un ZILOG 80
+K7=0		; qui possede une cassette
+EDITRS=1	; et un editeur VIDEO de type TRS
+BIG=0		; c'est pas gros
+DDT=0		; YA PAS DE DEBUG
+ROM=0		; c'est pas en ROM
+ 
+I1RST=1		; ya au - 1 RST
+NB1RST=6	; de numero 6
+AD1RST=$400F	; adresse du JMP
+ 
+;--------
+;0000
+;		Systeme TRS80 et BASIC LEVEL II (12K3/4)
+;42FF
+;--------
+..DSTK=$4300
+;		Buffers de lignes et pile (1K1/4)
+..FSTK=$47FF
+;--------
+..DECR=$4800
+;		Memoire de l'editeur (1K)
+..FECR=$4BFF
+;--------
+..DINT=$4C00
+;		Interprete LE LISP (6K) sans table initiale
+..FINT=$63FF
+;--------
+..DATO=$6400
+;		Atomes litteraux (3K1/2)
+..FATO=$71FF
+;--------
+..DLST=$7200
+;		Listes (3K1/2)
+..FLST=$7FFF
+;--------
+ 
+     .ENDC
+	.PAGE
+	.SBTTL	Map memoire === TRE80 === Level 2, 32kRAM et TRSDOS
+ 
+     .IFNE TRE80
+ZILOG=1		; c'est un Z 80
+COLOR=0		; avec le systeme COLORIX
+FILE=1		; avec des fichiers
+TRSDOS=1	;    de type TRSDOS classique
+K7=1		; avec K7
+EDITRS=1	; avec l'editeur VIDEO de type TRS
+BIG=1		; ya la place
+ROM=0		; c'est pas en ROM
+DDT=0		; ya le DEBUG
+TGC=1		; on teste le GC
+FRANZ=1		; les messages sont en FRANZAIS
+ 
+;--------
+;0000
+;		Systeme TRS80 et BASIC LEVEL II (12K3/4)
+;42FF
+;--------
+;4300
+;		Systeme TRSDOS (resident et overlay) (15K1/4)
+;6FFF
+;--------
+;7000
+;		Chargeur et debuggeur PDP 10 (1K)
+;73FF
+;--------
+;7400
+;		Buffers systeme TRSDOS (1/2K)
+;75FF
+;--------
+..DSTK=$7600
+;		Buffers de lignes et pile (1K1/2)
+..FSTK=$7FFF
+;--------
+..DECR=$8000
+;		Memoire ecran (1K)
+..FECR=$7FFF
+;--------
+..DINT=$8000
+;		Interprete LE LISP (7K) sans table initiale
+..FINT=$9BFF
+;--------
+..DATO=$9C00
+;		Atomes litteraux (5K)
+..FATO=$AFFF
+;--------
+..DLST=$B000
+;		Listes (4K)
+..FLST=$BFFF
+;--------
+ 
+     .ENDC
+	.PAGE
+	.SBTTL	Map memoire === TRD80 === Level 2, 48kRAM et TRSDOS
+ 
+     .IFNE TRD80
+ITEVAL=1	; on connait le port
+LAP=1		; ya un LAP
+ZILOG=1		; c'est un Z 80
+COLOR=0		; avec le systeme COLORIX
+FILE=1		; avec des fichiers
+TRSDOS=1	;    de type TRSDOS classique
+K7=1		; avec K7
+EDITRS=1	; avec l'editeur VIDEO de type TRS
+BIG=1		; ya la place
+ROM=0		; c'est pas en ROM
+DDT=0		; ya le DEBUG
+TGC=0		; on teste le GC
+FRANZ=1		; les messages sont en FRANZAIS
+ 
+;--------
+;0000
+;		Systeme TRS80 et BASIC LEVEL II (12K3/4)
+;42FF
+;--------
+;4300
+;		Systeme TRSDOS (resident et overlay) 6k (sur 15k1/4 6FFF)
+;5BFF
+;--------
+..DECR=$5C00
+;		memoire ecran de l'editeur (1k)
+..FECR=$5FFF
+;--------
+;6000
+;		Buffers systemes (1k) BUF.IN BUFF.OU FCB.IN FCB.OU
+;63FF
+;--------
+..DCOD=$6400
+;		Zone code (2k)
+..FCOD=$6BFF
+;--------
+;6C00
+;		Chargeurs sur PDP10 (1k) FTPA FTPB
+;6FFF
+;--------
+..DSTK=$7000
+;		Buffers lignes et pile (4k)
+..FSTK=$7FFF
+;--------
+..DINT=$8000
+;		Interprete LE LISP (9K) sans table initiale
+..FINT=$B1FF
+;--------
+..DATO=$B200
+;		Atomes litteraux (8K)
+..FATO=$C7FF
+;--------
+..DLST=$C800
+;		Listes (15k == 4k cons)
+..FLST=$FEFF	; attention $FFFF fait tout merder!!!
+;--------
+ 
+	.PRINT	TRD80
+ 
+     .ENDC
+	.PAGE
+	.SBTTL	Map memoire === SDK80 === 16kRAM et 8kPROM
+ 
+     .IFNE SDK80
+			; pas d'option du tout.
+ 
+;--------
+;0000
+;		Moniteur SDK80
+;03FF
+;--------
+;0400
+;		Asseubleur MAC 80 (3K)
+;0FFF
+;--------
+;1000
+;		Memoire de  travail SDK (1K)
+;13FF
+;--------
+..DSTK=$1400
+;		Buffers de lignes et pile (1K)
+..FSTK=$17FF
+;--------
+..DATO=$1800
+;		Atomes litteraux (6K)
+..FATO=$3FFF
+;--------
+..DLST=$4000
+;		Listes (8K)
+..FLST=$4FFF
+;-------
+..DINT=$8000
+;		Interprete LE LISP (8K) avec table initiale
+..FINT=$9FFF
+;--------
+ 
+     .ENDC
+	.PAGE
+	.SBTTL	Map memoire === SOR80 === 32kRAM  Sorcerer Exidy sur K7
+ 
+     .IFNE SOR80
+ZILOG=1		; c'est un Z 80
+FILE=0		; (actuellement) sans fichiers
+SORCPM=0	;    (qui seront) de type CP/M SORCERER
+K7=0		; (actuellement) sans K7
+EDISOR=0	; (actuellement) sans l'editeur VIDEO de type SORCERER
+BIG=0		; il y a beaucoup de place
+ROM=0		; c'est pas en ROM
+ 
+;---------
+;$0000
+;		Zone des RST et du chargeur ruban (1k)
+;$0400
+;---------
+..DINT=$0400
+;		Interprete LE LISP (7k) sans table initiale
+;		adresse de lancement : $0420
+..FINT=$1FFF
+;---------
+..DSTK=$2000
+;		Buffers de lignes et pile (2k)
+..FSTK=$27FF
+;--------
+..DATO=$2800
+;		Atomes litteraux (6K)
+..FATO=$3FFF
+;--------
+..DLST=$4000
+;		Listes (15k3/4) i.e. 4k doublets
+..FLST=$7EFF
+;---------
+;$7F00
+;		RAM de travail du Moniteur
+;$7FFF
+;---------
+;$C000
+;		ROM PACK (8k)
+;$DFFF
+;---------
+;$E000
+;		MONITOR PROM (4k)
+;$EFFF
+;---------
+;$F000
+;		VIDEO / GRAPHIC RAM
+;$FFFF
+;---------
+ 
+     .ENDC	; de SOR80
+	.PAGE
+	.SBTTL	Map memoire === SOM80 === 48kRAM  Sorcerer Exidy avec CP/M
+ 
+     .IFNE SOM80
+ 
+ZILOG=1		; c'est un Z 80
+FILE=1		; avec fichiers
+SORCPM=1	;   de type CP/M SORCERER
+K7=0		; (actuellement) sans K7
+EDISOR=0	; (actuellement) sans l'editeur VIDEO de type SORCERER
+BIG=1		; il y a beaucoup de place
+ROM=0		; c'est pas en ROM
+ 
+;---------
+;$0000
+;		Zone des RST et du chargeur ruban (1k)
+;$0400
+;---------
+..DINT=$0400
+;		Interprete LE LISP (7k) sans table initiale
+..FINT=$1FFF
+;---------
+..DSTK=$2000
+;		Buffers de lignes et pile (4k)
+..FSTK=$2FFF
+;--------
+..DATO=$3000
+;		Atomes litteraux (8K)
+..FATO=$4FFF
+;--------
+..DLST=$5000
+;		Listes (19k) i.e. < 5k doublets
+..FLST=$9BFF
+;---------
+;$9C00
+;		CP/M   (je suppose)
+;$BEFF
+;---------
+;$BF00
+;		RAM de travail du Moniteur
+;$BFFF
+;---------
+;$C000
+;		ROM PACK (8k)
+;$DFFF
+;---------
+;$E000
+;		MONITOR PROM (4k)
+;$EFFF
+;---------
+;$F000
+;		VIDEO / GRAPHIC RAM
+;$FFFF
+;---------
+     .ENDC	; de SOM80
+	.PAGE
+	.SBTTL	Map memoire === SOK80 === 48kRAM  Sorcerer Exidy avec RPM PACK
+ 
+     .IFNE SOK80
+ 
+ZILOG=1		; c'est un Z 80
+FILE=0		; sans les fichiers
+K7=0		; (actuellement) sans K7
+EDISOR=0	; (actuellement) sans l'editeur VIDEO de type SORCERER
+BIG=0		; il y a pas beaucoup de place
+ROM=1		; et c'est en ROM
+ 
+;---------
+;$0000
+;		Zone des RST et du chargeur ruban (1k)
+;$0400
+;---------
+..DSTK=$2000
+;		Buffers de lignes et pile (4k)
+..FSTK=$2FFF
+;--------
+..DATO=$3000
+;		Atomes litteraux (8K)
+..FATO=$4FFF
+;--------
+..DLST=$5000
+;		Listes (19k) i.e. < 5k doublets
+..FLST=$9BFF
+;---------
+;$9C00
+;		CP/M   (je suppose)
+;$BEFF
+;---------
+;$BF00
+;		RAM de travail du Moniteur
+;$BFFF
+;---------
+;*********
+;---------
+..DINT=$C000
+;
+;	ROM PACK (8k)
+;		Interprete LE LISP et table initiale
+..FINT=$DFFF
+;---------
+;$E000
+;		MONITOR PROM (4k)
+;$EFFF
+;---------
+;$F000
+;		VIDEO / GRAPHIC RAM
+;$FFFF
+;---------
+ 
+     .ENDC	; de SOM80
+	.PAGE
+	.SBTTL	Map memoire === IMSAI ===
+ 
+     .IFNE IMSAI
+ 
+ZILOG=0		; c'est pas un Z80
+COLOR=0		; pas de systeme COLORIX
+FILE=0		; pas de fichiers
+CPM1=1		;    de type CP/M classique 1.4
+K7=0		; pas de K7
+BIG=1		; ya la place
+ROM=0		; c'est pas en ROM
+DDT=0		; ya pas le DEBUG
+TGC=0		; on teste le GC
+ITEVAL=1	; il y a des its dans EVAL
+FRANZ=1		; les messages sont en BRETON
+ 
+;--------
+;0000
+;		1ere page de CP/M
+;00FF
+;--------
+;0100
+;		Chargeur et debuggeur PDP 10 (3/4k)
+;03FF
+;--------
+;0400
+;		Buffers systeme CP/M (1k) et autres babioles.
+;07FF		BUF.IN, BUF.OU, FCB.IN, FCB.OU
+;--------
+..DSTK=$0800
+;		Buffers de lignes et pile (4k)
+..FSTK=$17FF
+;--------
+..DINT=$2800
+;		Interprete LE LISP (8K) sans table initiale
+..FINT=$47FF
+;--------
+..DATO=$4800
+;		Atomes litteraux (8K)
+..FATO=$67FF
+;--------
+..DLST=$6800
+;		Listes (22k) 5,25 k cons
+..FLST=$BFFF
+;--------
+ 
+     .ENDC
+	.PAGE
+	.SBTTL	Map memoire === TRSII ===
+ 
+     .IFNE TRSII
+ 
+LAP=1		; ya un LAP
+ITEVAL=1	; on sait tester le port
+ZILOG=1		; c'est un Z80
+BIG=1		; il y a plein de place
+FILE=1		; il y a des fichiers
+TRSDS2=1	;   de type TRSDOS Model II
+ 
+;---------
+;$0000
+;		system TRSDOS model II (12k)
+;$2FFF
+;---------
+..DINT=$3000
+;		interprete LE LISP sans table (8k)
+..FINT=$4FFF
+;---------
+..DSTK=$5000
+;		buffers ligne et pile (8k)
+..FSTK=$6FFF
+;---------
+;$7000;		buffers systeme BUF.IN, BUF.OU (1k)
+;$73FF		et FCB.IN, FCB.OU
+;---------
+..DCOD=$7400
+;		code pour le compilateur (3k)
+..FCOD=$7FFF
+;---------
+..DATO=$8000
+;		atomes litteraux (8k)
+..FATO=$9FFF
+;---------
+..DLST=$A000
+;		listes (20k = 5k doublets)
+..FLST=$EFFF
+;---------
+;$F000
+;		reserve (4k)
+;$FFFF
+;---------
+ 
+     .ENDC	; de TRSII
+ 
+	.PAGE
+	.SBTTL	Map memoire === H89CPM === 48k RAM
+ 
+     .IFNE H89CPM
+ 
+LAP=1		; ya un LAP
+ZILOG=1		; c'est un Z80
+BIG=1		; ya plein de place (en fait c'est pas tres vrai)
+FILE=1		; il y a des fichiers
+CPM2=1		;    de type CP/M 2.2
+ITEVAL=1	; on connait le port
+ 
+;---------
+;0000
+;		1ere page de CP/M
+;00FF
+;---------
+..DCOD=$0100
+;		espace pour compilateur et autres
+..FCOD=$02FF
+;---------
+..DSTK=$0300
+;		buffers de ligne et pile (4k)
+..FSTK=$12FF
+;---------
+..DINT=$1300
+;		interprete (11k) sans table initiale
+..FINT=$3FFF
+;---------
+..DATO=$4000
+;		atomes litteraux (8k)
+..FATO=$5FFF
+;---------
+..DLST=$6000
+;		listes (15k = 3.75k doublets)
+..FLST=$9BFF
+;---------
+;9C00
+;		CP/M lui meme (9k)
+;BFFF
+;---------
+;C000
+;		c'est pas de la RAM
+;FFFF
+;---------
+ 
+	.PRINT H89CPM
+ 
+      .ENDC 	; H89CPM
+	.PAGE
+	.SBTTL	map memoire === Z89CPM === 64k RAM
+ 
+     .IFNE Z89CPM
+ 
+LAP=1		; YA UN LAP
+ZILOG=1		; C'EST UN Z80
+BIG=1		; YA PLEIN DE PLACE
+FILE=1		; IL Y A DES FICHIERS
+CPM2=1		; 	DE TYPE CP/M 2.2
+ITEVAL=1		; y a des interruptions
+ 
+;---------
+;0000
+;		1ERE PAGE DE CP/M
+;00FF
+;---------
+..DCOD=$0100
+;		ESPACE POUR COMPILATEUR ET EDITEUR
+..FCOD=$02FF
+;---------
+..DSTK=$0300
+;		BUFFERS DE DISQUE ET PILE (4 K)
+..FSTK=$12FF
+;---------
+..DINT=$1300
+;		INTERPRETRE (11 K) SANS TABLE INITIALE
+..FINT=$3FFF
+;--------
+..DATO=$4000
+;		ATOMES LITTERAUX (12 K)
+..FATO=$6FFF
+;---------
+..DLST=$7000
+;		LISTES (25 K)
+..FLST=$D9FF
+;---------
+;DA00
+;		CP/M LUI-MEME ET BUFFERS SYSTEME
+;FFFF
+;---------
+ 
+	.PRINT Z89CPM
+ 
+     .ENDC	; DE Z89CPM
+ 
+ 
+	.PAGE
+	.SBTTL	Map memoire === LEBLAN === 48k RAM
+ 
+     .IFNE LEBLAN
+ 
+ZILOG=1		; c'est un Zilog 80
+BIG=1		; ya plein de place
+ 
+;---------
+;$0000
+;		16k de ROM systeme
+;$3FFF
+;---------
+;$4000
+;		trou de 1k pour les routines systeme
+;$43FF
+;---------
+..DSTK=$4400
+;		buffer ligne et pile (7k)
+..FSTK=$5FFF
+;---------
+..DINT=$6000
+;		interprete sans table (8k)
+..FINT=$7FFF
+;---------
+..DATO=$8000
+;		atomes litteraux (8k)
+..FATO=$9FFF
+;---------
+..DLST=$A000
+;		listes (24k = 6k doublets)
+..FLST=$FEFF
+;---------
+ 
+     .ENDC	; de LEBLAN
+	.PAGE
+	.SBTTL	Map memoire === MICRAL === 58k CP/M
+ 
+     .IFNE MICRAL
+ 
+LAP=1		; il y a un LAP
+ZILOG=1		; c'est un Z80
+BIG=1		; il est assez gros
+FILE=1		; il possede un systeme de gestion de fichier
+CPM2=1		;    de type CP/M 2.2
+WHEEL=0	; pas de WHEEL
+ITEVAL=1	; on peut interrompre EVAL
+PEDAG=1		; on controle tout
+ 
+;---------
+;0000
+;		1ere page de CP/M
+;00FF
+;---------
+..DCOD=$0100
+;		espace pour le compilateur et l'editeur
+..FCOD=$02FF
+;---------
+..DSTK=$0300
+;		buffers disque et pile (4k)
+..FSTK=$12FF
+;---------
+..DINT=$1300
+;		interprete (11k) SANS table initiale des symboles
+..FINT=$3FFF
+;---------
+..DATO=$4000
+;		symboles (12k)
+..FATO=$6FFF
+;---------
+..DLST=$7000
+;		listes (25k) 6k1/4 cons cells
+..FLST=$D3FF
+;---------
+;		CP/M lui-meme et ses buffers
+;FFFF
+;---------
+ 
+	.PRINT	MICRAL
+ 
+     .ENDC	; de MICRAL
+	.PAGE
+	.SBTTL	Map memoire === SILZ ===
+ 
+     .IFNE SILZ
+ 
+ZILOG=1		; c'est un Z80
+LAP=1		; il y a un LAP
+BIG=1		; c'est assez gros
+FILE=1		; il y a un systeme de gestion de fichier
+CPM2=1		; de type CP/M 2.2
+PEDAG=1		; on controle tout
+ITEVAL=1		; on connait le port
+ 
+;---------
+;0000
+;		1ere page de CP/M
+;00FF
+;---------
+..DCOD=$0110
+;		espace pour le compilateur et l'editeur
+..FCOD=$02FF
+;---------
+..DSTK=$0300
+;		buffer disque et pile
+..FSTK=$12FF
+;---------
+..DINT=$1300
+;	interprete sans table initiale
+..FINT=$3FFF
+;---------
+..DATO=$4000
+;		symboles 12k
+..FATO=$6FFF
+;---------
+..DLST=$7000
+;		listes 25k
+..FLST=$D3FF
+;---------
+;D400
+;		CP/M et al.
+;FFFF
+;---------
+ 
+	.PRINT SILZ
+ 
+     .ENDC	; de SILZ
+ 
+	.PAGE
+	.SBTTL	Map Memoire === LOGAX ===
+ 
+     .IFNE LOGAX
+ 
+ZILOG=1		; c'est un Z80
+LAP=1		; il y a le LAP
+BIG=1		; il y a de la place
+FILE=1		; il y a un systeme de fichiers
+CPM2=1		; de type CP/M 2.2 et >
+PEDAG=1		; on controle tout
+ITEVAL=1	; on connait le port (en fait c'est pas vrai)
+ 
+;---------
+;0000
+;		1ere page de CP/M
+;00FF
+;---------
+..DCOD=$0110
+;		espace pour le compilateur et l'editeur
+..FCOD=$02FF
+;---------
+..DSTK=$0300
+;		buffer disque et pile
+..FSTK=$12FF
+;---------
+..DINT=$1300
+;		interprete sans table initiale
+..FINT=$3FFF
+;---------
+..DATO=$4000
+;		symboles 12 k
+..FATO=$6FFF
+;---------
+..DLST=$7000
+;		listes 25k
+..FLST=$D3FF
+;---------
+;D400
+;		CP/M et al.
+;FFFF
+;---------
+ 
+	.PRINT	LOGAX
+ 
+     .ENDC 	; LOGAX
+	.PAGE
+	.SBTTL	Map memoire === MICRAL === 58k CP/M
+ 
+     .IFNE MICRAL90
+ 
+LAP=1		; il y a un LAP
+I8086=1		; c'est un 8086
+BIG=1		; il est assez gros
+FILE=1		; il possede un systeme de gestion de fichier
+CPM86=1		;    de type CP/M 86
+WHEEL=0 	; pas de WHEEL
+ITEVAL=1	; on peut interrompre EVAL
+PEDAG=1		; on controle tout
+ 
+;---------
+;0000
+;		1ere page de CP/M
+;00FF
+;---------
+..DCOD=$0100
+;		espace pour le compilateur et l'editeur
+..FCOD=$02FF
+;---------
+..DSTK=$0300
+;		buffers disque et pile (4k)
+..FSTK=$12FF
+;---------
+..DINT=$1300
+;		interprete (17k) SANS table initiale des symboles
+..FINT=$57FF
+;---------
+..DATO=$5800
+;		symboles (10k)
+..FATO=$7FFF
+;---------
+..DLST=$8000
+;		listes (32k) 8k cons cells
+..FLST=$FEFF
+;---------
+
+	.PRINT	MICRAL90
+ 
+     .ENDC	; de MICRAL90
+	.PAGE
+	.SBTTL	Tests de validites des configurations
+ 
+ 
+	; definition des types generaux :
+ 
+MDS= MDS32 + MDS64
+TRS= TRS80 + TRC80 + TRE80 + TRD80 + TRP80
+SOR= SOR80 + SOM80 + SOK80
+H89=H89CPM + Z89CPM + H89DOS
+EDNAT=MICARL+SILZ+LOGAX-1
+ 
+     .IFNE MDS+MZ80+TRS+SDK80+SOR+IMSAI+TRSII+H89+LEBLAN+EDNAT+MICRAL90-1
+	.ERROR ; IL FAUT CHOISIR 1 ET 1 SEUL SYSTEME
+	.END
+     .ENDC
+ 
+CPM= CPM1 + CPM2 + CPM86
+FILE= ISIS + TRSDOS + TRSDS2 + TRSCPM + CPM
+ 
+     .IFG FILE-1
+	.ERROR ; IL FAUT CHOISIR 1 ET 1 SEUL SYSTEME DE FICHIERS
+	.END
+     .ENDC
+ 
+     .IFNE ZILOG
+	.ENABL	Z80	; validation des mnemoniques Z80
+     .ENDC
+ 
+EDIT= EDITRS + EDISOR
+ 
+    .IFNE EDIT
+     .IFNE EDIT-ZILOG
+	.ERROR ; si EDIT il faut ZILOG!
+     .ENDC
+    .ENDC
+ 
+; Pour le LAP
+ 
+     .IFNE LAP
+	.IFNDF ..DCOD
+	    .ERROR ; il faut definir ..DCOD
+	.ENDC
+	.IFNDF ..FCOD
+	    .ERROR ; il faut definir ..FCOD
+	.ENDC
+     .ENDC
+ 
+; pour les RSTs
+ 
+     .IFNE I1RST
+	.IFNDF AD1RST
+	   .ERROR ; Il faut l'adresse du 1RST!
+	.ENDC
+     .ENDC
+ 
+     .IFNE I2RST
+	.IFNDF AD2RST
+	   .ERROR ; Il faut l'adresse su 2RST!
+	.ENDC
+     .ENDC
+ 
+     .IFNE I3RST
+	.IFNDF AD3RST
+	   .ERROR ; Il faut l'adresse su 3RST!
+	.ENDC
+     .ENDC
+	.PAGE
+	.SBTTL	Macros
+
+ 
+ 
+;*****	1) Macros controlees par des RST
+ 
+ 
+;-----	.UNCNS DE <- (CAR HL) & HL <- (CDR HL)
+ 
+   .IFNE I1RST
+     .MACRO .UNCNS
+	RST	NB1RST
+     .ENDM
+   .IFF
+     .MACRO .UNCNS
+	MOV	D,M
+	INR	L
+	MOV	E,M
+	INR	L
+	MOV	A,M
+	INR	L
+	MOV	L,M
+	MOV	H,A
+     .ENDM
+   .ENDC
+ 
+ 
+;-----	.UNCNB		BC <- (CAR HL)	HL <- (CDR HL)
+ 
+ 
+    .MACRO .UNCNB
+	MOV	B,M
+	INR	L
+	MOV	C,M
+	INR	L
+	MOV	A,M
+	INR	L
+	MOV	L,M
+	MOV	H,A
+    .ENDM
+ 
+;-----	.PLACE		 (RPLACD (SP) DE <- (LIST HL))
+ 
+     .MACRO .PLACE
+	CALL	NCONS
+	XCHG
+	POP	H
+	INR	L
+	INR	L
+	MOV	M,D
+	INR	L
+	MOV	M,E
+     .ENDM
+ 
+;-----	.RPLCB			(RPLACB DE HL)
+ 
+     .MACRO .RPLCB
+	.IFNE ZILOG
+	 LXI	B,4
+	 LDIR
+	.IFF
+	CALL	RPLB0
+	.ENDC	; DE ZILOG
+     .ENDM	; desole Emmanuel mais il faut que je change...
+ 
+;-----	.RPLD	REG1,REG2	(RPLACD HL REG1REG2)
+ 
+     .MACRO .RPLD REG1,REG2
+	INR	L
+	INR	L
+	MOV	M,REG1
+	INR	L
+	MOV	M,REG2
+     .ENDM
+ 
+ 
+;-----	.XCVAL		BC <- (CVAL HL)	  (CVAL HL) <- DE
+ 
+     .MACRO .XCVAL
+	MOV	B,M
+	MOV	M,D
+	INR	L
+	MOV	C,M
+	MOV	M,E
+	DCR	L
+     .ENDM
+ 
+ 
+;-----	.ERRM : appel d'une erreur
+ 
+   .IFNE I2RST
+     .MACRO .ERRM
+	RST	NB2RST
+     .ENDM
+   .IFF
+     .MACRO .ERRM
+	CALL	ERRMS
+     .ENDM
+   .ENDC
+ 
+;-----	.PCRLF : impression d'un RC/LF
+ 
+   .IFNE I3RST
+     .MACRO .PCRLF
+	RST	NB3RST
+     .ENDM
+   .IFF
+     .MACRO .PCRLF
+	CALL	PCRLF
+     .ENDM
+   .ENDC
+ 
+;-----	CKSTK controle le stack overflow. Utilise HL
+;	Est utilise dans : GC READ PROBJ EVAL
+ 
+     .MACRO CKSTK ETIQ
+	LXI	H,0
+	DAD	SP
+	MOV	A,H
+	CPI	HSTAK
+	JC	ETIQ
+     .ENDM
+ 
+;-----	TESTIT	teste si un caractere est frappe sur la console
+;		en testant directement le port, car l'appel de CS
+;		est beaucoup trop lent.
+ 
+   .MACRO TESTIT
+      .IFNE TRS
+	LDA	$3840
+	ANI	4
+      .ENDC	; de TRS
+      .IFNE MICRAL
+	LDA	$FFFC
+	ANI	1
+      .ENDC	; de MICRAL
+      .IFNE SILZ
+	LDA	$FF30
+	ORA	A
+	.BYTE	0	; un NOP pour cadrer a 5, pour Michel
+      .ENDC	; de SILZ
+      .IFNE Z89CPM ! H89CPM
+	IN	237
+	ANI	1
+     .ENDC	; de Z89CPM ! H89CPM
+     .IFNE LOGAX
+	CALL	CS	; il devrait y avoir mieux
+	ORA	A
+	.BYTE	0	; un NOP pour cadrer a 5, pour Michel
+     .ENDC	; de LOGAX
+     .IFNE MICRAL90
+	XRA	A
+	OUT	$24	; select la console
+	IN	$24	; le registre d'etat
+	ANI	1	; alors ?
+     .ENDC
+  .ENDM	; de TESTIT
+	.PAGE
+;*****	TESTS DE TYPE (tous sont realises avec des macros)
+ 
+ 
+;-----	JTNUM REG,ETIQ ; vers ETIQ si REG est un nombre.
+ 
+     .MACRO JTNUM REG,ETIQ
+	MOV	A,REG
+	CPI	HATOM
+	JC	ETIQ
+     .ENDM
+ 
+;-----	JFNUM REG,ETIQ ; vers ETIQ si REG n'est pas un nb.
+ 
+     .MACRO JFNUM REG,ETIQ
+	MOV	A,REG
+	CPI	HATOM
+ 	JNC	ETIQ
+     .ENDM
+ 
+;-----	RFNUM	REG	; RETURN si REG n'est pas un nombre
+ 
+     .MACRO RFNUM REG
+	MOV	A,REG
+	CPI	HATOM
+	RNC
+     .ENDM
+ 
+;-----	JTNIL REG,ETIQ ; vers ETIQ si REG est egal a NIL
+ 
+     .MACRO JTNIL REG,ETIQ
+	MOV	A,REG
+	CPI	HNIL
+	JZ	ETIQ
+     .ENDM
+ 
+;-----	JFNIL REG,ETIQ ; vers ETIQ si REG n'est pas egal a NIL
+ 
+     .MACRO JFNIL REG,ETIQ
+	MOV	A,REG
+	CPI	HNIL
+	JNZ	ETIQ
+     .ENDM
+ 
+;-----	RTNIL	REG	; return si REG est NIL
+ 
+     .MACRO RTNIL REG
+	MOV	A,REG
+	CPI	HNIL
+	RZ
+     .ENDM
+ 
+;-----	RFNIL	REG	; return si REG n'est pas NIL
+ 
+     .MACRO RFNIL REG
+	MOV	A,REG
+	CPI	HNIL
+	RNZ
+     .ENDM
+ 
+;-----	JFATO REG,ETIQ ; vers ETIQ si REG n'est pas un atome litteral
+ 
+     .MACRO JFATO REG,ETIQ
+	MOV	A,REG
+	CPI	HNIL
+	JC	ETIQ
+	CPI	HLIST
+	JNC	ETIQ
+     .ENDM
+ 
+;-----	JFVAR REG,ETIQ	; vers ETIQ si REG n'est pas une constante
+ 
+     .MACRO JFVAR REG,ETIQ
+	MOV	A,REG
+	CPI	HVAR
+	JNC	ETIQ
+     .ENDM
+ 
+;-----	JTVAR REG,ETIQ ; vers ETIQ si REG est une constante.
+ 
+     .MACRO JTVAR REG,ETIQ
+	MOV	A,REG
+	CPI	HVAR
+	JC	ETIQ
+     .ENDM
+ 
+;-----	RTVAR	REG	; RETURN si REG est une constante!
+ 
+     .MACRO RTVAR REG
+	MOV	A,REG
+	CPI	HVAR
+	RC
+     .ENDM
+ 
+;-----	JFLST REG,ETIQ ; vers ETIQ si REG n'est pas une liste.
+ 
+     .MACRO JFLST REG,ETIQ
+	MOV	A,REG
+	CPI	HLIST
+	JC	ETIQ
+     .ENDM
+ 
+;-----	JTLST REG,ETIQ ; vers ETIQ si REG est une liste.
+ 
+     .MACRO JTLST REG,ETIQ
+	MOV	A,REG
+	CPI	HLIST
+	JNC	ETIQ
+     .ENDM
+ 
+;-----	RTLST REG ; RETURN si REG est une liste
+ 
+     .MACRO RTLST REG
+	MOV	A,REG
+	CPI	HLIST
+	RNC
+     .ENDM
+ 
+;-----	RFLST REG ; RETURN si REG n'est pas une liste.
+ 
+     .MACRO RFLST REG
+	MOV	A,REG
+	CPI	HLIST
+	RC
+     .ENDM
+ 
+;-----	JTOVN	REG,ETIQ ; vers ETIQ si REG est un OVNI
+ 
+     .MACRO JTOVN REG,ETIQ
+	MOV	A,REG
+	CPI	HELST
+	JNC	ETIQ
+     .ENDM
+ 
+;-----	JFOVN	REG,ETIQ ; vers ETIQ si REG n'est pas un OVNI
+ 
+     .MACRO JFOVN REG,ETIQ
+	MOV	A,REG
+	CPI	HELST
+	JC	ETIQ
+     .ENDM
+ 
+ 
+;-----	JTLTA	REG,ETIQ	; vers ETIQ si (car REG) est une liste
+ 
+     .MACRO JTLTA	REG,ETIQ
+	LDAX	REG
+	CPI	HLIST
+	JNC	ETIQ
+     .ENDM
+ 
+ 
+;-----	JLTNL	REG,ETIQ1,ETIQ2	; vers ETIQ1 si REG est une liste
+;				  vers ETIQ2 si REG est NIL
+ 
+     .MACRO JLTNL	REG,ETIQ1,ETIQ2
+	MOV	A,REG
+	CPI	HLIST
+	JNC	ETIQ1
+	CPI	HNIL
+	JZ	ETIQ2
+     .ENDM
+ 
+;-----	JLTNN	REG,ETIQ1,ETIQ2	; vers ETIQ1 si REG est une liste
+;				  vers ETIQ2 si REG n'est pas NIL
+ 
+     .MACRO JLTNN	REG,ETIQ1,ETIQ2
+	MOV	A,REG
+	CPI	HLIST
+	JNC	ETIQ1
+	CPI	HNIL
+	JNZ	ETIQ2
+     .ENDM
+ 
+ 
+;-----	JTAFF	REG,ETIQ	; vers ETIQ si REG n'est pas affectable
+;
+     .MACRO JTAFF	REG,ETIQ
+	MOV	A,REG
+	CPI	HVAR
+	JC	ETIQ
+	CPI	HLIST
+	JNC	ETIQ
+     .ENDM
+ 
+	.PAGE
+;*****	Les macros qui fabriquent des symboles :
+
+;	1 - le 1er symbole : NIL	MAKNIL
+;	2 - de type constante		MAKST
+;	3 - de type fonction	   	MAKAT
+;	4 - de type constante/fonction	MAKAC
+;
+;		forme  d'un atome :
+;		[   	CVAL	   ]
+;		[    	PLIST	   ]
+;		[       F-VAL	   ]
+;		[  F-TYP - P-TYPE  ]
+;		[      A-LINK	   ]
+;		[   P-LEN  PN1	   ]
+;		[   PN2    PN3	   ]
+;		        ...
+
+
+;	1 - farbrication du 1er : NIL
+
+     .MACRO MAKNIL
+.MKLS=.
+	.ADDR	.NIL,.NIL,0,0,0
+	.BYTE	3
+	.ASCII	'nil  '
+     .ENDM
+	
+;	2 - fabrique une constante
+
+     .MACRO MAKST MAKPT
+.MKNW=. + IMEM
+	.ADDR	<<. + IMEM> ^> ! <<. + IMEM> * 256 & $FF00>
+	.ADDR	.NIL	; P-LIST
+	.ADDR	0  	; F-VAL  
+	.BYTE	0	; F-TYP 
+	.BYTE	MAKPT	; P-TYP
+	.ADDR	.MKLS	; A-LINK
+.MKLS=.MKNW
+     .ENDM	; de MAKST
+
+;	3 - fabrique une fonction
+
+     .MACRO MAKAT MAKAD,MAKFT,MAKPT
+.MKNW=. + IMEM
+	.ADDR	.UNDF,.NIL
+	.ADDR	MAKAD
+	.BYTE	MAKFT,MAKPT
+	.ADDR	.MKLS
+.MKLS=.MKNW
+     .ENDM	; de MAKAT
+
+;	4 - fabrique une constante/fonction
+
+     .MACRO MAKAC MAKAD,MAKFT,MAKPT
+.MKNW=. + IMEM
+	.ADDR	<<. + IMEM> ^> ! <<. + IMEM> * 256 & $FF00>
+	.ADDR	.NIL		; Plist
+	.ADDR	MAKAD		; Fval
+	.BYTE	MAKFT,MAKPT	; Ftype, Ptype
+	.ADDR	.MKLS
+.MKLS=.MKNW
+     .ENDM	; de MAKAC
+

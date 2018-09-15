@@ -1,0 +1,554 @@
+To: chaillou
+
+
+		***********************
+		*                     *
+		*   La machine LLM3   *
+		*                     *
+		***********************
+		    Jerome  Chailloux
+		      Novembre 1982
+
+
+	<<  Ceci n'est pas le papier sur LLM3 mais simplement  >>
+	<<  un guide pour les transporteurs de LLM3 sur P.E.   >>
+
+
+
+Elle ne manipule que des pointeurs (et accessoirement des octets).
+
+
+les operandes :
+
+	A1 A2 A3 A4	les 4 accumulateurs (registres)
+	'obj (ou .obj)	l'adresse de l'objet
+	#n		une valeur immediate numerique
+	CAR(reg)		sur les CONS
+	CDR(reg)	
+	CVAL(reg)		sur les symboles
+	PLIST(reg)
+	FVAL(reg)
+	ALINK(reg)
+	PKGC(reg)
+	adr		une adresse memoire
+			(etiquette ou donnee)
+
+Regle d'appel des sous-programmes (fonctions) :
+
+	pour les SUBR a 0,1,2 ou 3 arguments, les arguments
+	sont passes respectivement dans les registres :
+		A1, A2, A3
+	pour les SUBR a plus d'arguments ou a nombre variable (SUBRV),
+	les arguments sont empiles et le nombre d'arguments est
+	fourni dans A4
+	pour les SUBRF, la liste des arguments non evalues
+	(i.e le CDR de l'appel) se trouve dans A1.
+
+	toutes les fonctions retournent leur valeur dans A1
+
+
+		--------------------------
+		 Les Pseudos-Instructions
+		--------------------------
+
+
+	FENTRY	nom,type    nom devient une etiquette, type peut etre
+			  l'un des suivants :
+		            SUBR0, SUBR1, SUBR2, SUBR3, SUBRV, SUBRF
+
+	ADR	adr		reserve 1 mot contenant une adresse
+	BYTE	val		reserve 1 octet contenant une valeur
+	DSADR	val		reserve val mot pour des adresses
+	DSBYTE	val		reserve val octets pour des adresses
+	ASCII	'chaine'
+
+	EQU	expression
+
+	PURE			c'est du code
+	IMPURE			ce sont des donnees
+
+	TITRE	nom,...		nom du module LLM3
+
+	XREF	nom1,...,nomN	liste de noms d'externes
+	XDEF	nom1,...,nomN	liste de noms d'internes
+
+	END			et oui!
+
+
+		--------------------------
+		 Les Instructions de base
+		--------------------------
+
+les transferts simples (de pointeurs) :
+
+	MOV    op1,op2		op1 -> op2    pointeur
+	MOVAD  adr,op		adresse de adr -> op
+
+	MOVX op1,adr,op2		op1 -> adr[op2]
+	XMOV op1,adr,op2		adr[op1] -> op2
+
+les transferts d'octets :
+
+	MOVB op1,op2		op1 -> op2
+
+	MOVBX op1,adr,op2		op1 -> adr[op2]
+	XMOVB op1,adr,op2		adr[op1] -> op2
+
+le controle :
+
+	BRA lab		vers lab
+	JMP lab		idem (mais indique une adresse longue
+			pour les machines 16/32 bits)
+	JUMPI  op		vers l'adresse contenue dans op
+
+	BTEQ op1,op2,lab	si op1 = op2 vers lab
+	BFEQ op1,op2,lab	si op1 /= op2 vers lab
+
+	JUMPX adr,op	vers adr[op]
+
+
+
+		---------
+		 La Pile
+		---------
+
+
+Utilisee   comme   operande   implicite  dans  des  instructions
+specialisees.    Ces  instructions  qui  utilisent  un  registre
+pointeur  de pile (SP) ne necessitent pas de sens de contruction
+privilegie  ni de test de debordement implicite.  La pile occupe
+en general 4k objets.
+
+organisation memoire : definition de 3 variables globales :
+
+	BSTACK	qui contient l'adresse du debut de la pile
+	ESTACK	qui contient l'adresse de fin de la pile
+	MSTACK	qui contient qui l'adresse de fin de pile moins
+		la tolerance de EVAL (typiquement de 64 objets)
+
+Gestion de la pile :
+
+	STACK op		SP -> op
+	SSTACK op		op -> SP (a n'utiliser
+			qu'apres un STACK)
+	CHKSTK op,lab	teste le debordement de pile
+			si SP >= op vers lab
+			op peut-etre MSTACK ou ESTACK
+
+Pile de controle :
+
+	CALL  adr		next SP ; PC -> (SP) ; adr -> PC
+	JCALL adr		idem (mais indique une adresse longue
+			pour les machines 16/32 bits)
+	RETURN		(SP) -> PC ; prev SP
+
+Pile de donnee :
+
+	TOPST op		(SP)   ->  op
+	XTOPST op		(SP)  <->  op
+	PUSH op		next SP ; op -> (SP)
+	PUSHAD op		next SP ; adr de op -> (SP)
+	POP op		(SP) -> op ; prev SP
+		
+	ADJSTK		depile (SP) fois i.e. le sommet de
+			pile contient le nombre d'objets
+			a depiler.
+
+*	pour les 2 instructions suivantes l'indice du sommet de
+*	pile vaut -1, celui du sous-sommet 0, du sous-sous sommet
+*	1 ... pour pouvoir gerer facilement les SUBRV
+
+	MOVXSP op1,op2	op1 -> stack[op2]
+	XSPMOV op1,op2      stack[op1] -> op2
+
+
+Voici le modele du traitement des SUBRV dans l'ordre des arguments :
+
+	FENTRY	FOO,SUBRV
+
+*---
+	BTEQ	A4,#0,TERMIN
+	PUSH	A4
+	BRA	TESTFIN
+NEXTARG	XSPMOV	A4,A1
+	
+	....	traitement de A1
+
+TESTFIN	SOBGEZ	A4,NEXTARG
+	ADJSTK
+TERMIN	RETURN
+
+et dans l'ordre inverse des arguments :
+
+	FENTRY	BAR,SUBRV
+*---
+	...
+	BRA	TESTFIN
+NEXTARG	POP	A1
+
+	....	traitement de A1
+
+TESTFIN	SOBGEZ	A4,NEXTARG
+	RETURN
+
+
+		-----
+		 NIL
+		-----
+
+
+Nil is Nil! Mais pour des raisons d'efficacite il est souhaitable
+de metttre Nil dans un registre.
+
+
+	MOVNIL op		NIL -> op
+
+	BTNIL op,lab	si op  = NIL vers lab
+	BFNIL op,lab	si op /= NIL vers lab
+
+enfin, uniquement pour l'initialisateur, il faut l'instruction :
+
+	SETNIL op		op -> NIL
+
+
+		----------
+ 		 Les CONS
+		----------
+
+
+Le type le plus utilise et qu'il faut le plus soigner. 
+
+organisation memoire : definition de 2 variables globales :
+
+	BCONS     qui contient l'adresse du debut de la
+		zone des listes (l'adresse du premier
+		doublet)
+	ECONS	qui contient l'adresse de la fin de la
+		zone des listes (l'adresse du dernier
+		doublet)
+
+et  d'un  pointeur FREEL qui contient la tete de la liste libre.
+il  est  souhaitable  que  FREEL  soit  un registre pour pouvoir
+macrogenerer  facilement les instructions de type CONS.  De plus
+2  instructions  speciales permettent de lire/ecrire ce pointeur
+qui n'est donc pas traite comme un variable globale LLM3.
+
+ACCES  AU  CONS  -  au moyen d'operandes de la machine LLM3 (ces
+operandes  ne  sont valides que pour des CONS : le code ecrit en
+LLM3  s'assure  toujours  que 'reg' contient bien un pointeur de
+type CONS avant d'utiliser ces operandes) :
+
+	CAR(reg)  et
+	CDR(reg)
+
+CREATION  (ALLOCATION)  D'UN  CONS - au moyen de 3 instructions.
+S'il  n'est  plus possible d'allouer de nouveaux doublets, appel
+de  la routine GCCONS automatiquement par ces instructions (mais
+la routine GCCONS est toutefois ecrite en LLM3) :
+
+	CONS  op1,op2         (op1 . op2)  ->  op2
+ 	XCONS op1,op2         (op2 . op1)  ->  op2
+	NCONS op              (op  . NIL)  ->  op
+
+TEST  DU  TYPE CONS - de tres loin le plus frequent test de type
+et  qu'il  faut  particulierement soigner par exemple en mettant
+BCONS dans un registre.
+
+	BTCONS  op,lab        si (CONSP op) vers lab
+	BFCONS  op,lab        si (ATOM op)  vers lab
+
+
+LE  GARBAGE-COLLECTOR  (GC)  -  utilise en plus les instructions
+suivantes qui permettent de marquer et de tester des CONS :
+
+	STMARK  op	marque le CONS d'adresse op
+	CLMARK  op	demarque le CONS d'adresse op
+
+	BTMARK  op,lab      si le CONS est marque vers lab
+	BFMARK  op,lab      si le CONS n'est pas marque vers lab
+
+	TCMARK  op,lab      si le CONS d'adresse op est marque,
+			on le demarque et on se branche vers lab.
+
+	NXCONS   op	op (qui contient l'adresse d'un CONS)
+			pointe maintenant sur le CONS physiquement
+			suivant.
+
+Le GC pourra egalement manipuler la tete de la liste libre FREEL
+au moyen des instructions suivantes :
+
+	FREEL  op		FREEL -> op
+	SFREEL op		op -> FREEL
+
+BIT  INVISIBLE - pour les amateurs de sensations fortes : un bit
+'invisible' positionnable dans tous les CONS.  Ce bit tres utile
+pour coder tres efficacement les types CEYX est manipule par les
+instructions :
+
+	STINVSBL	op	marque le CONS d'adresse op
+	CLINVSBL	op	demarque le CONS d'adresse op
+	BTINVSBL	op,lab	si le CONS d'adresse op est marque vers lab
+	BFINVSBL	op,lab	si le CONS d'adresse op n'est pas marque vers lab
+
+
+
+		--------------
+		 Les symboles
+		--------------
+
+
+Le type le plus complexe.
+
+Organisation de la memoire : variables globales :
+
+	CSYMB	contient l'adresse du 1er mot libre de
+		l'espace symbole.
+	BSYMB	contient l'adresse du debut de la zone symbole
+	ESYMB	contient l'adresse de la fin de la zone symbole
+
+ACCES aux differentes proprietes naturelles.
+
+Operandes :	
+		CVAL(reg)		Cell Value 
+		PLIST(reg)	Properties List
+		FVAL(reg)		Function Value
+		ALINK(reg)	Atom Link
+		PKGC(reg)		Package Cell
+
+Instructions specialisees :
+
+	GCVAL  op1,op2	cval(op1) -> op2
+	SCVAL  op1,op2	op1 -> cval(op2)
+
+	GFTYPE op1,op2	ftype(op1) -> op2
+	SFTYPE op1,op2	op1 -> ftype(op2)
+
+	GPTYPE op1,op2	ptype(op1) -> op2
+	SPTYPE op1,op2	op1 -> ptype(op1)
+
+	PNAM   adr,op1,op2	range les caracteres du Pname de A1
+			dans un tampon a l'adresse adr a
+			partir de la position op1. Le nombre
+			de caracteres transferes se trouve dans op2.
+
+TEST DE TYPE :
+
+	BTSYMB  op,lab        si (SYMBOLP op) vers lab
+	BFSYMB  op,lab        si (NOT (SYMBOLP op))  vers lab
+
+
+CREATION STATIQUE :
+
+	MAKFNT	lab,ptype,pkg,plen,pname
+	MAKCST	lab,ptype,pkg,plen,pname
+	MAKVOID	lab,ptype
+
+CREATION DYNAMIQUE :
+
+	INTERN	op1,adr,op2 	op1 est le nombre de caracteres qui
+				se trouvent dans le tampon adresse.
+				retourne son adresse internee dans op2
+
+L'OBLIST  (la  liste  des  symboles)  -  est geree au moyen d'un
+tableau  de  hachage,  les colisions sont gerees par chainage au
+moyen du champ ALINK des symboles.  La fin d'un tel chainage est
+indique  par  la  valeur  numerique  0.   Cette  table utilise 2
+symboles globaux :
+
+	HASHMAX	index maximum de la table de hachage
+	HASHTAB	table de hachage
+
+
+pour parcourir l'OBLIST :
+
+	MOV	HASHMAX,A3
+RE	XMOV	A3,HASTAB,A2
+
+	... traite la sous-liste dans A2
+
+	SOBGEZ	A3,RE
+
+
+ex : la fonction OBLIST la plus simple 
+     (sans le traitement des packages) :
+
+	FENTRY	OBLIST,SUBR0
+*---
+	MOVNIL	A1
+	MOV	HASHMAX,A3
+OBL1	XMOV	A3,HASHTAB,A2
+	BRA	OBL3
+OBL2	CONS	A2,A1
+	MOV	ALINK(A2),A2
+OBL3	BTSYMB	A2,OBL2
+	SOBGEZ	A3,OBL1
+	RETURN
+
+
+
+		-------------
+		 Les nombres
+		-------------
+
+
+
+1 - Les petits entiers (e.g. sur 16 bits).
+
+    les operandes se decrivent par : #n donc MOV marche!
+    en plus :
+
+	BTNUMB op,lab	si op est un nombre vers lab
+	BFNUMB op,lab	si op n'est pas un nb vers lab
+
+    pour toutes les instructions de calcul, si le dernier argument 'lab'
+    est fourni, il y a branchement a cette etiquette si un  debordement
+    se produit. Si l'etiquette n'est pas fournie le test de debordement
+    n'est pas effectue.
+
+	INCR op[,lab]	op + 1 -> op
+	DECR op[,lab]	op - 1 -> op
+
+	PLUS op1,op2[,lab]	op1 + op2 -> op2
+	DIFF op1,op2[,lab]	op1 - op2 -> op2
+	NEG op		- op -> op
+	MUL op1,op2[,lab]	op1 * op2 -> op2
+	DIV op1,op2[,lab]	op1 / op2 -> op2
+	REM op1,op2[,lab]	op1 \ op2 -> op2
+
+	CBEQ/NE/LT/LE/GT/GE  op1,op2,lab   compare et vers si
+
+	SOBGEZ op,lab	op - 1 -> op; si op >= 0  vers lab
+
+	LAND op1,op2	op1 AND op2 -> op2
+	LOR op1,op2	op1 OR op2 -> op2
+	LXOR op1,op2	op1 XOR op2 -> op2
+
+ex : la fonction PLUS
+
+	FENTRY	PLUS,SUBRV
+*---
+	MOV	#0,A1
+	BRA	PL2
+PL1	POP	A2
+	PLUS	A2,A1,PLOVL
+PL2	SOBGEZ	A4,PL1
+	RETURN
+PLOVL	MOV	.PLUS,A2
+	BRA	ERROVF
+
+
+2 - les nombres flottants
+
+3 - les nombres a precision variable
+
+4 - les octets
+
+pour les systemes qui ne possedent pas de chaines de caracteres,
+il est tres utile de pouvoir gerer des "lignes tassees" qui sont
+des  listes  de paquets de 2 caracteres, representes par un seul
+nb de 16 bits.
+
+	LBYTE	op1,op2,lab	octet gauche de op1 -> op2
+				branchement vers lab si op2 = 0
+	RBYTE	op1,op2,lab	octet droit de op1 -> op2
+				branchement vers lab si op2 = 0
+	
+
+		---------------------------
+		 Les Chaines de Caracteres
+		---------------------------
+
+
+representees par une zone memoire contenant les caracteres et une taille.
+Desole, la representation UNIX (terminee par un 00) n'est pas utilisable.
+On se demande meme comment UNIX peut vivre avec cette representation idiote.
+
+ORGANISATION : c'est une zone memoire separee dont les adresses sont dans
+les variables globales :
+
+	BSTRG	contient l'adresse du 1er mot de la zone chaine
+	ESTRG	contient l'adresse du dernier mot de cette zone
+
+TEST DE TYPE :
+
+	BTSTRG op,lab	si op est une chaine vers lab
+	BFSTRG op,lab	si op n'est pas une chaine vers lab
+
+CREATION : au moyen d'une seule instruction (qui va appeler a coup sur
+une routine du run-time LLM3). S'il n'y a plus de place dans la zone
+allouee aux chaines de caracteres, cette routine doit appeler le
+garbage collector au point d'entree GCSTRG.
+
+	MKSTRG op1,adr,op2	    op1 contient la taille de la chaine.
+                                  adresse est l'adresse de la liste de
+                                  caracteres. op2 contiendra l'adresse
+                                  de la chaine cree.
+
+
+Le GC a egalement besoin d'une instruction pour avancer dans
+la zone des chaines de caracteres :
+
+	NXSTRG op    op (qui contient l'adresse d'un chaine
+		   de caracteres) pointe maintenant sur la
+		   chaine physiquement suivante.
+
+
+
+		---------------------
+		 Les Entrees/Sorties
+		---------------------
+
+
+Fonctions  sur le canal terminal.  Ce terminal doit etre utilise
+au  caractere  et  sans  echo  ni aucun transcodage.  Toutes ces
+fonctions  retournent  un  code d'erreur (cc) qui vaut 0 si tout
+s'est bien passe.
+
+	TTYIN  op1,op2	le caractere tape suivant -> op1,
+			cc -> op2
+		Attention : cette routine doit absolument retourner
+		le code tape TEL QUEL (en particulier le RETURN ne
+		doit pas etre traduit en Line Feed!)
+
+	TTYOUT  op1,adr,op2 	sort une chaine de caracteres :
+				  op1 = taille de la chaine
+				  adr = adresse de la chaine
+				  cc -> op2
+
+	TTYS  op1,op2	si un caractere a ete tape -> op1, sinon
+			NIL -> op1.  cc -> op2.
+
+
+
+Fonctions sur les fichiers : toutes ces fonctions utilisent des
+numeros de canaux (chan) alloues par le systeme Le_Lisp. Le nombre
+maximum (moins 1) de canaux alloues est donne dans la variable
+globale :
+	 MAXCHAN
+
+	INFILE  chan,file,cc  	ouvre sur la canal chan le fichier
+				de nom file, en entree.
+
+	INBF chan,adr,siz,cc	lit la ligne suivant sur le canal chan
+				a l'adresse adr. au retour size 
+				contient la taille de la ligne.
+
+	OUFILE  chan,file,cc	ouvre sur le canal chan le fichier
+				de nom file, en sortie.
+
+	OUBF chan,adr,siz,cc	ecrit sur le canal chan la ligne
+				a l'adresse adr et de taille siz.
+
+	FCLOS  chan,cc		ferme le canal chan.
+
+Fonctions sur les images memoire :
+
+	SAVECORE	op1,adr,op2	sauve une image memoire de nom :
+				  op1 = taille de la chaine,
+				  adr = adresse des caracteres.
+				  cc -> op2
+	
+	RESTCORE op1,adr,op2	restitue une image memoire de nom :
+				  op1 = taille de la chaine,
+				  adr = adresse des caracteres.
+				  cc -> op2

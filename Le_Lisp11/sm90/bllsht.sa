@@ -1,0 +1,268 @@
+	PAGE
+
+***********************************************************************
+*							*
+*	L E   L I S P   6 8 K   :   les fonctions bullshit	*
+*							*
+*		  DERNIER MODULE DU_LISP 68K			*
+*							*
+***********************************************************************
+
+BLLSHT	IDNT	1,1	LLM3 : le bullshit en tout genre
+
+	SECTION 10
+
+	XREF	BCODE,ECODE
+	XREF	BUILDAT,POPJ,FALSE,TRUE
+	XREF	REENTER,THEEND
+	XREF	GC,SERROR,ERRNAA,ERRNNA,ERRNLA
+	XREF	EVALCAR,EVALA1,PROGNA3,SAVEP,PROGN,APPLY
+	XREF	.UNDEF,.T,.QUOTE
+	XREF	PROBJ
+	XREF	SYSTEM
+
+	XDEF	INI_BLL
+	XDEF	ENVIRON		; pour SYSTEM ?!?!?
+
+*
+*	creation des atomes
+*	-------------------
+
+INI_BLL
+
+	NOLIST
+
+	MAKFNT	LOC,0,3,'LOC'
+	MAKFNT	VAG,0,3,'VAG'
+	MAKFNT	MEMORY,0,6,'MEMORY'
+	MAKFNT	ADDADR,0,6,'ADDADR'
+	MAKFNT	SUBADR,0,6,'SUBADR'
+	MAKFNT	CMPADR,0,6,'CMPADR'
+
+	MAKFNT	ABCODE,0,6,<':BCODE'>
+	MAKFNT	AECODE,0,6,<':ECODE'>
+
+	MAKFNT	RESET,0,5,'RESET'
+	MAKFNT	STOP,0,4,'QUIT'
+	MAKFNT	STOP,0,4,'STOP'
+	MAKFNT	STOP,0,3,'END'
+
+	MAKFNT	SH,0,2,'SH'
+
+	RETURN
+
+*
+*	(LOC s)	retourne l'adresse de s (sous la forme (high . low))
+*
+	FENTRY	LOC,SUBR1
+*---
+	MOV	A1,D2
+	SWAP	D2
+	AND.L	\#$FFFF,D2 	isole les poids forts
+	BEQ.S	LOC9		c'est un nb simple.
+	MOV	A1,D1
+	AND.L	\#$FFFF,D1 	isole les poids faibles
+	CRANB	D1,A1		poids faibles internes
+	CRANB	D2,A2		poids forts internes
+	CONS	A2,A1		(forts . faibles)
+LOC9	RETURN	*		qui est retournee
+
+*
+*	(VAG (high . loc))	retourne l'objet d'adresse (l . h)
+*
+	FENTRY	VAG,SUBR1
+*---
+	BFLIST.S	A1,VAGERR 	il faut une liste
+	MOV	CAR(A1),A2	high
+	MOV	CDR(A1),A3	low
+	CLR.L	D1
+	MOVE.W	A2,D1		val high
+	CLR.L	D2
+	MOVE.W	A3,D2		val low
+	SWAP	D1		high - 00
+	OR.L	D1,D2		high - low
+	MOV	D2,A1
+	RETURN
+VAGERR	MOV	.VAG,A2		le nom
+	BRA	ERRNLA		ce doit etre une liste
+
+*
+*	(ADDADR (high . low) (high . low))
+*	fait un calcul d'adresse
+*
+	FENTRY	ADDADR,SUBR2
+*---
+	BTNUMB.S	A1,ADDADR1	le nb est pret
+	BFLIST.S	A1,ADDAER1	il faut une liste alors
+	MOV	CAR(A1),A4	high
+	MOV	CDR(A1),A3	low
+	CLR.L	D1
+	MOVE.W	A4,D1		val high
+	CLR.L	D2
+	MOVE.W	A3,D2		val low
+	SWAP	D1		high - 00
+	OR.L	D1,D2		high - low
+	MOV	D2,A1
+ADDADR1	BTNUMB.S	A2,ADDADR2	le nb est pret
+	BFLIST.S	A2,ADDAER2	il faut une liste alors
+	MOV	CAR(A2),A4	high
+	MOV	CDR(A2),A3	low
+	CLR.L	D1
+	MOVE.W	A4,D1		val high
+	CLR.L	D2
+	MOVE.W	A3,D2		val low
+	SWAP	D1		high - 00
+	OR.L	D1,D2		high - low
+	MOV	D2,A2
+ADDADR2	ADD.L	A2,A1		calcul de la somme
+	BRA	LOC		et on passe sous forme (h . l)
+
+ADDAER2	MOV	A2,A1		le mauvais argument
+ADDAER1	MOV	.ADDADR,A2	le nom
+	BRA	ERRNLA		ce doit etre une liste
+
+*
+*	(SUBADR (high . low) (high . low))
+*	fait un calcul d'adresse
+*
+	FENTRY	SUBADR,SUBR2
+*---
+	BTNUMB.S	A1,SUBADR1	le nb est pret
+	BFLIST.S	A1,SUBAER1	il faut une liste alors
+	MOV	CAR(A1),A4	high
+	MOV	CDR(A1),A3	low
+	CLR.L	D1
+	MOVE.W	A4,D1		val high
+	CLR.L	D2
+	MOVE.W	A3,D2		val low
+	SWAP	D1		high - 00
+	OR.L	D1,D2		high - low
+	MOV	D2,A1
+SUBADR1	BTNUMB.S	A2,SUBADR2	le nb est pret
+	BFLIST.S	A2,SUBAER2	il faut une liste alors
+	MOV	CAR(A2),A4	high
+	MOV	CDR(A2),A3	low
+	CLR.L	D1
+	MOVE.W	A4,D1		val high
+	CLR.L	D2
+	MOVE.W	A3,D2		val low
+	SWAP	D1		high - 00
+	OR.L	D1,D2		high - low
+	MOV	D2,A2
+SUBADR2	SUB.L	A2,A1		calcul de la somme
+	BRA	LOC		et on passe sous forme (h . l)
+
+SUBAER2	MOV	A2,A1		le mauvais argument
+SUBAER1	MOV	.SUBADR,A2	le nom
+	BRA	ERRNLA		ce doit etre une liste
+
+*
+*	(CMPADR (high . low) (high . low))
+*	fait une comparaison d'adresse : retourne T si a1 >= a2
+*
+	FENTRY	CMPADR,SUBR2
+*---
+	BTNUMB.S	A1,CMPADR1	le nb est pret
+	BFLIST.S	A1,CMPAER1	il faut une liste alors
+	MOV	CAR(A1),A4	high
+	MOV	CDR(A1),A3	low
+	CLR.L	D1
+	MOVE.W	A4,D1		val high
+	CLR.L	D2
+	MOVE.W	A3,D2		val low
+	SWAP	D1		high - 00
+	OR.L	D1,D2		high - low
+	MOV	D2,A1
+CMPADR1	BTNUMB.S	A2,CMPADR2	le nb est pret
+	BFLIST.S	A2,CMPAER2	il faut une liste alors
+	MOV	CAR(A2),A4	high
+	MOV	CDR(A2),A3	low
+	CLR.L	D1
+	MOVE.W	A4,D1		val high
+	CLR.L	D2
+	MOVE.W	A3,D2		val low
+	SWAP	D1		high - 00
+	OR.L	D1,D2		high - low
+	MOV	D2,A2
+CMPADR2	CMP.L	A2,A1		si A1 >= A2
+	BGE.S	CMPADR9		retourne T
+	BRA	FALSE		sinon NIL
+CMPADR9	JMP	TRUE
+CMPAER2	MOV	A2,A1		le mauvais argument
+CMPAER1	MOV	.CMPADR,A2	le nom
+	BRA	ERRNLA		ce doit etre une liste
+
+*
+*	(MEMORY adr [val])
+*	charge un mot de 16 bits (utilise par le chargeur)
+*
+	FENTRY	MEMORY,SUBRV2
+*---
+	BFLIST	A1,ERRNLA 	il faut une liste
+	MOV	CAR(A1),A3
+	MOV	CDR(A1),A4
+	VALNB	A3,D1
+	VALNB	A4,D2
+	SWAP	D1
+	AND.L	\#$FFFF0000,D1
+	AND.L	\#$FFFF,D2
+	OR.L	D1,D2		D2 contient l'adresse sur 32 bits
+	BTNIL.S	A2,MEMR2		vers le GET seul
+	VALNB	A2,D1		D1 contient la valeur
+	MOV	D2,A0
+	MOVE.W	D1,(A0)
+MEMR2	MOV	D2,A0		A0 contient l'adresse
+	MOVE.W	(A0),D1		le GET
+	CRANB	D1,A1
+	RETURN	*		et retoune cette valeur
+
+*
+*	Manipulation de l'adresse de la zone code
+*
+
+	FENTRY	ABCODE,SUBR0
+*---
+	MOV	BCODE,A1		la veritable adresse
+	BRA	LOC		transformee en (high . low)
+
+	FENTRY	AECODE,SUBR0
+*---
+	MOV	ECODE,A1		la veritable adresse
+	BRA	LOC		transformee en (high . low)
+
+
+*
+*	 fonctions systeme
+*	-------------------
+*
+
+	FENTRY	RESET,SUBR0
+*---
+	BRA	REENTER		et voila
+
+
+	FENTRY	STOP,SUBR0
+*---
+	BRA	THEEND		c'est tout !
+
+
+	FENTRY	SH,SUBR1
+*---
+	PNAM	A1,ZONARG	la chaine de caracteres du PNAME!
+	MOVEM.L	A1-A6/D1-D7,-(A7)
+	PUSHAD	ZONARG
+	JSR	SYSTEM
+	POP	A0		dummy!!
+	MOVEM.L	(A7)+,A1-A6/D1-D7
+	BRA	TRUE		retourne toujours T
+
+
+         SECTION   15
+*
+*	bloc d'argument pour Pascal
+*
+
+ZONARG	DCB.L	10,0
+
+ENVIRON	DC.L	0,0		pour systeme ?!?!?
+

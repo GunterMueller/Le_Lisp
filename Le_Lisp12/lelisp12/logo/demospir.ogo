@@ -1,0 +1,32 @@
+pour spirale :c :a :i :n
+
+si :n < 1 alors [stop ]
+
+av :c
+
+td :a
+
+spirale :c + :i :a :i :n - 1
+
+fin
+
+ 
+
+pour demospir
+
+te cache echelle 3
+
+ecris [* * * siprale 1 94 2 ]
+
+spirale 1 94 2 60
+
+te cache echelle 3
+
+ecris [* * * spirale 1 123 2 ]
+
+spirale 1 123 2 95
+
+fin
+
+ 
+

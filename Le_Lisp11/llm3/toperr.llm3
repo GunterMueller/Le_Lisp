@@ -1,0 +1,583 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :  toplevel et taitement des erreurs
+*
+****************************************************************
+*
+*                Jerome CHAILLOUX  (Chailloux.Vlsi)
+*                           I.N.R.I.A.
+*                Domaine de Voluceau,  Rocquencourt
+*                B.P. 105,   78153 Le Chesnay Cedex
+*                tel : (1) 954 90 20      poste 456
+*
+*****************************************************************
+ 
+ 
+          TITRE     TOPERR       LLM3 : toplevel et erreurs.
+ 
+ 
+          XREF      BUILDAT,CSYMB                 pour MAKFNT
+          XREF      .UNDEF,.VOID
+          XREF      GC                            pour CONS
+          XREF      LL_TTYO                       pour TTYOUT
+ 
+          XREF      REENTER                       LL68K !!! a integrer ici !!!
+          XREF      LEL_A7                                  LL68K pile LeLisp
+          XREF      U_READ                                  READ
+          XREF      PROBJ,PROBJT,U_PRINT                    PRINT
+          XREF      PBIND,FINDTAG                           EVAL
+          XREF      ITSOFT,U_EVAL                           EVAL
+          XREF      NREVERSE                                in FNTSTD
+          XREF      LOC                                     in BLLSHT
+ 
+          XDEF      INI_TOP
+          XDEF      POPJ
+          XDEF      SYSTOP
+          XDEF      SERROR,FERROR,ERRFS,ERFM,ERROVF
+          XDEF      ERRUDV,ERRUDF,ERRUDT,ERRWLA,ERRWNA
+          XDEF      ERRNAA,ERRNNA,ERRNSA,ERRNLA
+          XDEF      ERRNVA,ERRNCA,ERRWNA,ERRSTL
+          XDEF      ERROOB,ERRIOS,ERRSXT
+ 
+*
+*         EQU des numeros d'erreur
+*         ========================
+*
+ 
+NR_UDV    EQU       1         variable indefinie EVAL
+NR_UDF    EQU       2         fonction indefinie EVAL APPLY
+NR_UDT    EQU       3         echappement indefini TAG ETAG EXIT
+*         EQU       4
+*         EQU       *
+NR_SXT    EQU       6         erreur de syntaxe READ IMPLODE
+*         EQU       7
+NR_IOS    EQU       8         I/O erreur
+NR_OVF    EQU       9         debordement numerique
+NR_NNA    EQU       10        non nombre argument
+NR_NSA    EQU       11        non string argument
+NR_NAA    EQU       12        non atomes argument
+NR_NLA    EQU       13        non liste argument
+NR_NVA    EQU       14        non variable argument
+NR_NCA    EQU       15        non caractere argument
+NR_OOB    EQU       16        argument hors-limite
+NR_WNA    EQU       17        mauvais nb d'arguments
+NR_WLA    EQU       18        mauvaise liste d'arguments
+NR_STL    EQU       19        chaine trop longue
+ 
+ 
+          PURE
+ 
+*
+*         INI_TOP : initialise les constantes systeme
+*         ===========================================
+*
+ 
+INI_TOP   EQU       *
+ 
+          XDEF      .T,.0SUBR,.1SUBR,.2SUBR,.3SUBR,.NSUBR
+          XDEF      .FSUBR,.EXPR,.FEXPR,.MACRO
+ 
+          NOLIST
+          MAKCST    T,0,.VOID,1,'T'
+          MAKCST    0SUBR,0,.VOID,5,'0SUBR'
+          MAKCST    1SUBR,0,.VOID,5,'1SUBR'
+          MAKCST    2SUBR,0,.VOID,5,'2SUBR'
+          MAKCST    3SUBR,0,.VOID,5,'3SUBR'
+          MAKCST    NSUBR,0,.VOID,5,'NSUBR'
+          MAKCST    FSUBR,0,.VOID,5,'FSUBR'
+          MAKCST    EXPR,0,.VOID,4,'EXPR'
+          MAKCST    FEXPR,0,.VOID,5,'FEXPR'
+          MAKCST    MACRO,0,.VOID,5,'MACRO'
+ 
+          MAKFNT    TOPLEVEL,0,.VOID,8,'TOPLEVEL'
+          MAKCST    STATOPLEVEL,0,.VOID,15,'STATUS-TOPLEVEL'
+ 
+          MOV       .STATOPLEVEL,A4
+          MOV       .T,CVAL(A4)                   init status a T (speak)
+ 
+          MAKFNT    RUNT,0,.VOID,7,'RUNTIME'
+          MAKFNT    CSTACK,0,.VOID,6,'CSTACK'
+          MAKFNT    SYSERROR,0,.VOID,8,'SYSERROR'
+          MAKCST    FATALERROR,0,.VOID,14,'**ERRSET-TAG**'
+          MAKCST    MSERROR,0,.VOID,3,<'** '>
+          MAKCST    COLON,0,.VOID,3,<' : '>
+          MAKCST    TRAP,0,.VOID,4,'TRAP'
+          MAKCST    K68,0,.VOID,7,'MC68000'
+
+          MAKCST    MER0,0,.VOID,8,<'erreur 0'>
+          MAKCST    MER1,0,.VOID,18,<'variable indefinie'>
+          MAKCST    MER2,0,.VOID,18,<'fonction indefinie'>
+          MAKCST    MER3,0,.VOID,20,<'echappement indefini'>
+          MAKCST    MER4,0,.VOID,21,<'chronologie indefinie'>
+          MAKCST    MER5,0,.VOID,27,<'LAMBDA expression indefinie'>
+          MAKCST    MER6,0,.VOID,17,<'erreur de syntaxe'>
+          MAKCST    MER7,0,.VOID,31,<'debordement du tampon de sortie'>
+          MAKCST    MER8,0,.VOID,22,<'erreur d entree sortie'>
+          MAKCST    MER9,0,.VOID,20,<'debordement d entier'>
+          MAKCST    MER10,0,.VOID,30,<'l argument n est pas un nombre'>
+          MAKCST    MER11,0,.VOID,31,<'l argument n est pas une chaine'>
+          MAKCST    MER12,0,.VOID,31,<'l argument n est pas un symbole'>
+          MAKCST    MER13,0,.VOID,30,<'l argument n est pas une liste'>
+          MAKCST    MER14,0,.VOID,33,<'l argument n est pas une variable'>
+          MAKCST    MER15,0,.VOID,33,<'l argument n est pas un caractere'>
+          MAKCST    MER16,0,.VOID,21,<'argument hors limites'>
+          MAKCST    MER17,0,.VOID,26,<'mauvais nombre d arguments'>
+          MAKCST    MER18,0,.VOID,26,<'mauvaise liste d arguments'>
+          MAKCST    MER19,0,.VOID,32,<'chaine de caracteres trop longue'>
+ 
+          MAKCST    MACH0,0,.VOID,13,<'erreur du bus'>
+          MAKCST    MACH1,0,.VOID,14,<'erreur adresse'>
+          MAKCST    MACH2,0,.VOID,20,<'instruction illegale'>
+          MAKCST    MACH3,0,.VOID,14,<'division par 0'>
+          MAKCST    MACH4,0,.VOID,15,<'instruction CHK'>
+          MAKCST    MACH5,0,.VOID,17,<'instruction TRAPV'>
+          MAKCST    MACH6,0,.VOID,19,<'violation privilege'>
+          MAKCST    MACH7,0,.VOID,16,<'instruction 1010'>
+          MAKCST    MACH8,0,.VOID,16,<'instruction 1111'>
+ 
+          MOVX      .MER0,TABERR,#0
+          MOVX      .MER1,TABERR,#1
+          MOVX      .MER2,TABERR,#2
+          MOVX      .MER3,TABERR,#3
+          MOVX      .MER4,TABERR,#4
+          MOVX      .MER5,TABERR,#5
+          MOVX      .MER6,TABERR,#6
+          MOVX      .MER7,TABERR,#7
+          MOVX      .MER8,TABERR,#8
+          MOVX      .MER9,TABERR,#9
+          MOVX      .MER10,TABERR,#10
+          MOVX      .MER11,TABERR,#11
+          MOVX      .MER12,TABERR,#12
+          MOVX      .MER13,TABERR,#13
+          MOVX      .MER14,TABERR,#14
+          MOVX      .MER15,TABERR,#15
+          MOVX      .MER16,TABERR,#16
+          MOVX      .MER17,TABERR,#17
+          MOVX      .MER18,TABERR,#18
+          MOVX      .MER19,TABERR,#19
+ 
+          MOVX      .MACH0,MACERR,#0
+          MOVX      .MACH1,MACERR,#1
+          MOVX      .MACH2,MACERR,#2
+          MOVX      .MACH3,MACERR,#3
+          MOVX      .MACH4,MACERR,#4
+          MOVX      .MACH5,MACERR,#5
+          MOVX      .MACH6,MACERR,#6
+          MOVX      .MACH7,MACERR,#7
+          MOVX      .MACH8,MACERR,#8
+ 
+ 
+*         chargement de la table des exceptions
+ 
+     IFNE VERSADOS
+          LEA       TEVTA,A0            table des vecteurs d'interruption
+          MOVEQ     #26,D0
+          TRAP      #1
+ 
+          LEA       TBTRP,A0            table des adresses des TRAPs
+          MOVEQ     #27,D0
+          TRAP      #1
+     ENDC
+ 
+          RETURN
+ 
+ 
+*
+*         Points de retour tres frequents
+*         ===============================
+*
+ 
+POPJ      RETURN
+ 
+ 
+ 
+*
+*         Le toplevel du systeme
+*         ======================
+*
+ 
+SYSTOP    EQU       *                   la boucle principale
+          MOVNIL    PBIND               rien en pile
+          MOV       .TOPLEVEL,A1        le nom de la fonction a lancer
+          MOVNIL    A2                  sans argument
+          CALL      ITSOFT              et on appelle l'IT soft.
+          BRA.S     SYSTOP              ad vitam aeternam
+ 
+*
+*         la fonction toplevel standard
+*         =============================
+*
+ 
+*----------------------------------------
+          FENTRY    TOPLEVEL,SUBR0
+*----------------------------------------
+          CALL      U_READ              on lit une S-expr
+          CALL      U_EVAL              on evalue
+          MOV       .STATOPLEVEL,A2     adresse du symbole status
+          MOV       CVAL(A2),A2         sa valeur
+          BTNIL.S   A2,TOPLEND          il ne faut rien faire
+          TTYOUT    #2,TPMSG,A2         sort '= ' sans erreur (A2 oublie)
+          CALL      U_PRINT             et impression du resultat
+TOPLEND   RETURN    *                   et c'est tout.
+ 
+ 
+ 
+*
+*         Retourne le contenu de la pile : CSTACK
+*         =======================================
+*
+ 
+*----------------------------------------
+          FENTRY    CSTACK,SUBR0
+*----------------------------------------
+          MOVNIL    A1                  prepare le resultat
+          PUSH      A1                  dans la pile
+          MOV       PBIND,A4            recup le pointeur sur les blocs
+          BRA.S     EVSTCK3
+EVSTCK1   MOVNIL    A1                  debut d'un bloc
+          POP       A3,A4               le type
+          CONS      A3,A1               c'est le 1er element d'une sous-liste
+          JUMPX     TEVSTCK,A3          en fonction du type du bloc
+ 
+TEVSTCK   ADR       EVSTKL              type 0 : bloc LAMBDA
+          ADR       EVSTKA              type 1 : bloc LABEL
+          ADR       EVSTKE              type 2 : bloc TAG
+          ADR       EVSTKS              type 3 : bloc STEPEVAL
+          ADR       EVSTKB              type 4 : bloc BARRIER
+          ADR       EVSTKU              type 5 : bloc UNWIND-PROTECT
+ 
+*         au retour d'un bloc, A4 = PBIND
+EVSTCK2   EQU       *                   retour d'un bloc
+          CALL      NREVERSE            retourne la liste
+          POP       A2                  le debut de la liste
+          CONS      A1,A2
+          PUSH      A2                  resauve la liste resultat
+EVSTCK3   BFNIL     A4,EVSTCK1          vers un nouveau bloc
+          POP       A1                  le resultat total
+          BRA       NREVERSE            que l'on retourne a son tour.
+ 
+ 
+EVSTKL    EQU       *                   bloc LAMBDA
+          POP       A3,A4               la FVAL
+          CONS      A3,A1
+EVSTKL1   POP       A3,A4
+          CBEQ.S    A3,#MK_EVAL,EVSTKL2 vers un autre bloc
+          CONS      A3,A1               nom de la variable
+          POP       A3,A4
+          CONS      A3,A1               valeur
+          BRA       EVSTKL1             ca roule
+EVSTKL2   POP       A4,A4               nouveau PBIND
+          BRA       EVSTCK2             vers le nouveau bloc
+ 
+EVSTKA    EQU       *                   bloc LABEL
+          POP       A2,A4               sauve le nouveau PBIND
+          POP       A3,A4               nom de la fonction
+          CONS      A3,A1
+          POP       A3,A4               ancienne FVAL
+          CONS      A3,A1
+          POP       A3,A4               ancien FTYP
+          CONS      A3,A1
+          MOV       A2,A4               nouveau PBIND
+          BRA       EVSTCK2
+ 
+EVSTKE    EQU       *                   bloc TAG
+EVSTKB    EQU       *                   bloc BARRIER
+          POP       A3,A4               nom de l'echappement
+          CONS      A3,A1
+          POP       A4,A4               nouveau PBIND
+          BRA       EVSTCK2             vers le nouveau bloc
+ 
+EVSTKS    EQU       *                   bloc STEPEVAL
+          POP       A2,A4               nouveau PBIND
+          POP       A3,A4               chrono courante
+          CONS      A3,A1
+          POP       A3,A4               etat courant
+          CONS      A3,A1
+          MOV       A2,A4               nouveau PBIND
+          BRA       EVSTCK2             vers le nouveau bloc
+ 
+EVSTKU    EQU       *                   bloc UNWIND-PROTECT
+          POP       A2,A4               progn de la deliaison
+          CONS      A3,A1
+          POP       A4,A4               nouveau PBIND
+          BRA       EVSTCK2             vers le bloc suivant
+ 
+
+*
+*         Autres fonctions systeme
+*
+*----------------------------------------
+          FENTRY    RUNT,SUBR0
+*----------------------------------------
+          RUNTIME   A1                  c'est vraiment dependant du systeme!
+          RETURN
+
+ 
+*
+*         Erreurs standards
+*         =================
+*
+ 
+*
+*         SERROR : point d'entree de toutes les erreurs interprete
+*         A1= bad-arg, A2= funct, A3= type-err
+*
+ 
+SERROR    EQU       *
+          NCONS     A1                  (bad-arg)
+          XMOV      A3,TABERR,A3        clair du type de l'erreur
+          CONS      A3,A1               (typ bad-arg)
+          XCONS     A1,A2               (arg typ funct)
+          MOV       .SYSERROR,A1        nom SYSERROR
+          BRA       ITSOFT              et on appelle l'IT
+ 
+*
+*         FERROR : erreur fatale, realise un (EXIT FATAL-ERROR NIL)
+*
+ 
+FERROR    EQU       *
+          MOVNIL    A1                  histoire de recuperer de la place
+          MOV       .FATALERROR,A2      le nom de l'echappement
+          MOVNIL    A3                  itou
+          MOVNIL    A4                  et voila c'est propre
+          BRA       FINDTAG             vers le EXIT.
+ 
+*
+*         SYSERROR : IT soft appelee en cas d'erreur
+*
+*----------------------------------------
+          FENTRY    SYSERROR,SUBR3
+*----------------------------------------
+          PUSH      A3                  le mauvais argument
+          PUSH      A2                  le type de l'erreur
+          PUSH      A1                  le nom de la fonction
+          MOV       .MSERROR,A1          le message ** Erreur
+          CALL      PROBJ
+          POP       A1                  le nom de la fonction
+          CALL      PROBJ
+          MOV       .COLON,A1           le :
+          CALL      PROBJ
+          POP       A1                  le type de l'erreur
+          CALL      PROBJ
+          MOV       .COLON,A1           le :
+          CALL      PROBJ
+          POP       A1                  le mauvais argument
+          CALL      PROBJT
+          BRA       REENTER
+ 
+*
+*         quelques erreurs fatales celebres
+*
+ 
+ERRFS     EQU       *                   erreur pile pleine
+          MSG       42,<'**** Erreur fatale : pile pleine ****     '>
+          MSGCRLF
+          BRA       FERROR
+ 
+ERFM      EQU       *
+          MSG       42,<'**** Erreur fatale : plus de memoire **** '>
+          MSGCRLF
+          BRA       FERROR
+ 
+*
+*         quelques erreurs standards celebres
+*
+ 
+ 
+ERRUDV    EQU       *
+          MOV       #NR_UDV,A3          le numero
+          BRA       SERROR
+ 
+ERRUDF    EQU       *
+          MOV       #NR_UDF,A3          le numero
+          BRA       SERROR
+ 
+ERRUDT    EQU       *
+          MOV       #NR_UDT,A3         le numero
+          BRA       SERROR
+ 
+ERRWNA    EQU       *
+          MOV       #NR_WNA,A3
+          BRA       SERROR
+ 
+ERRWLA    EQU       *
+          MOV       #NR_WLA,A3          le numero
+          BRA       SERROR
+ 
+ERRSXT    EQU       *
+          MOV       #NR_SXT,A3          le numero
+          BRA       SERROR
+ 
+ERRIOS    EQU       *
+          MOV       #NR_IOS,A3          le numero
+          BRA       SERROR
+ 
+ERROVF    EQU       *
+          MOV       #NR_OVF,A3          le numero
+          BRA       SERROR
+ 
+ERRNAA    EQU       *
+          MOV       #NR_NAA,A3          le numero
+          BRA       SERROR
+ 
+ERRNNA    EQU       *
+          MOV       #NR_NNA,A3          le numero
+          BRA       SERROR
+ 
+ERRNSA    EQU       *
+          MOV       #NR_NSA,A3          le numero
+          BRA       SERROR
+ 
+ERRNLA    EQU       *
+          MOV       #NR_NLA,A3          le numero
+          BRA       SERROR
+ 
+ERRNVA    EQU       *
+          MOV       #NR_NVA,A3          le numero
+          BRA       SERROR
+ 
+ERRNCA    EQU       *
+          MOV       #NR_NCA,A3          le numero
+          BRA       SERROR
+ 
+ERRSTL    EQU       *
+          MOV       #NR_STL,A3          le numero
+          BRA       SERROR
+ 
+ERROOB    EQU       *
+          MOV       #NR_OOB,A3          le numero
+          BRA       SERROR
+ 
+*
+*         Erreurs machine 68000
+*
+ 
+MERROR    EQU       *
+          PUSH      A1                  sauve le numero
+*?!?!?!?!?! peut-etre faut-il utiliser LOC-INTERN avec A0 !!!!!!!!
+          STACK     A1                  recupere le pointeur de pile
+          CALL      LOC                 calcul son adresse LISP
+          NCONS     A1                  (sp)
+          POP       A2
+          XMOV      A2,MACERR,A2        le nom du type de l'erreur
+          XCONS     A1,A2               (nom)
+          MOV       .K68,A1             qui provoque l'erreur
+          CONS      A1,A2               A2 <- (68000 nom)
+          MOV       .SYSERROR,A1        qui on doit appeler
+          BRA       ITSOFT              au travail
+ 
+ 
+EVTA0     MOV       #0,A1
+          BRA       MERROR
+EVTA1     MOV       #1,A1
+          BRA       MERROR
+EVTA2     MOV       #2,A1
+          BRA       MERROR
+EVTA3     MOV       #3,A1
+          BRA       MERROR
+EVTA4     MOV       #4,A1
+          BRA       MERROR
+EVTA5     MOV       #5,A1
+          BRA       MERROR
+ 
+*
+*         Les TRAPS du 68000
+*         ==================
+*
+ 
+TERROR    EQU       *
+ 
+*?!?!?!?!?!?!??!?!?!?!?!?!?!??!!???!?!?!?!?!?!?!?
+*         PASSAGE EN MODE LISP
+*?!?!?!?!?!?!??!?!?!?!?!?!?!??!!???!?!?!?!?!?!?!?
+     IFNE VERSADOS
+          MOVE.L    LEL_A7,A7 pile lisp
+          MOVEM.L   (A7)+,A1-A6/D1-D7
+          MOV       A0,A1               ; le numero du trap
+          CRANB     D0,A2               ; en general l'argument
+     ENDC
+          NCONS     A2                  ; (bad-arg)
+          CONS      A1,A2               ; (notrap bad-arg)
+          MOV       .TRAP,A1            ; qui provoque l'erreur
+          CONS      A1,A2               ; A2 <- (TRAP notrap badarg)
+          MOV       .SYSERROR,A1        ; qui on doit appeler
+          BRA       ITSOFT              ; au travail
+ 
+TRP1      MOV       #1,A1
+          BRA       TERROR
+TRP2      MOV       #2,A1
+          BRA       TERROR
+TRP3      MOV       #3,A1
+          BRA       TERROR
+TRP4      MOV       #4,A1
+          BRA       TERROR
+TRP5      MOV       #5,A1
+          BRA       TERROR
+TRP6      MOV       #6,A1
+          BRA       TERROR
+TRP7      MOV       #7,A1
+          BRA       TERROR
+TRP8      MOV       #8,A1
+          BRA       TERROR
+TRP9      MOV       #9,A1
+          BRA       TERROR
+TRP10     MOV       #10,A1
+          BRA       TERROR
+TRP11     MOV       #11,A1
+          BRA       TERROR
+TRP12     MOV       #12,A1
+          BRA       TERROR
+TRP13     MOV       #13,A1
+          BRA       TERROR
+TRP14     MOV       #14,A1
+          BRA       TERROR
+TRP15     MOV       #15,A1
+          BRA       TERROR
+ 
+ 
+*
+*         Donnees pour le toplevel et les erreurs
+*         =======================================
+*
+ 
+TEVTA     ADR       EVTA1               bus error
+          ADR       EVTA1               address error
+          ADR       EVTA2               illegal instuction
+          ADR       EVTA3               0 divide
+          ADR       EVTA4               CHECK inst
+          ADR       EVTA5               TRAPV
+          ADR       0                   privilge viol
+          ADR       0                   line 1010
+          ADR       0                   line 1111
+ 
+TBTRP     ADR       0                   ; TRP2
+          ADR       0                   ; TRP3
+          ADR       0                   ; TRP4
+          ADR       TRP5
+          ADR       TRP6
+          ADR       TRP7
+          ADR       TRP8
+          ADR       TRP9
+          ADR       TRP10
+          ADR       TRP11
+          ADR       TRP12
+          ADR       TRP13
+          ADR       TRP14
+          ADR       0                   ; TRP15
+ 
+ 
+TPMSG     ASCII     <'= '>              le signe du top-level
+ 
+          IMPURE
+ 
+          XDEF      TABERR
+ 
+*         Table des clairs des erreurs
+ 
+TABERR    DSADR     20        pour 19 erreurs actuellement
+ 
+MACERR    DSADR     10        pour les 10 erreurs machine
+ 
+          END
+ 
+ 

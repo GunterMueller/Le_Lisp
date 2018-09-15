@@ -1,0 +1,121 @@
+*************************************************************
+*                                                           *
+*             Les Macros LLM3 pour le G.C.                  *
+*                                                           *
+*************************************************************
+*                                                           *
+*                     Jerome   CHAILLOUX                    *
+*                                                           *
+*                     I . N . R . I . A .                   *
+*              Domaine de Voluceau, Rocquencourt            *
+*              B.P. 105   78153 Le Chesnay Cedex            *
+*              Tel : (1) 954 90 20   poste 456              *
+*                                                           *
+*************************************************************
+ 
+ 
+          NOLIST
+ 
+_BMARK   EQU       29                   numero du bit de GC
+_BINVIS  EQU       28                   numero du bit invisible
+
+_MMARK   EQU       $20000000		masque idoine
+_MINVIS  EQU       $10000000		masque idoine 
+
+
+*
+*         Macros Speciales du GC
+*         ======================
+*
+ 
+ 
+*         BTMARK e,lab        saut a 'lab' si 'e' est deja marque
+ 
+BTMARK    MACRO
+          bbs       $_bmark,\1,\2
+          ENDM
+ 
+*         BFMARK e,lab        saut a 'lab' si 'e' n'est pas deja marque
+ 
+BFMARK    MACRO
+          bbc       $_bmark,\1,\2
+          ENDM
+ 
+*         STMARK e            marque l'objet e
+ 
+STMARK    MACRO
+          bisl2     $_mmark,\1
+          ENDM
+ 
+*         CLMARK e            demarque l'objet e
+ 
+CLMARK    MACRO
+          bicl2     $_mmark,\1
+          ENDM
+ 
+*         TCMARK e,lab        test si e est marque :
+*                             si non ne fait rien
+*                             si oui enleve la marque et branche a 'lab'
+ 
+TCMARK    MACRO
+          bbsc      $_bmark,\1,\2
+          ENDM
+ 
+ 
+*
+*         Macros speciales de manipulation du bit invisible
+*         =================================================
+*
+ 
+STINVSBL  MACRO
+          bisl2    $_minvis,\1
+          ENDM
+ 
+CLINVSBL  MACRO
+          bicl2    $_minvis,\1
+          ENDM
+ 
+BTINVSBL  MACRO
+          bbs       $_binvis,\1,\2
+          ENDM
+ 
+BFINVSBL  MACRO
+          bbc       $_binvis,\1,\2
+          ENDM
+ 
+ 
+***********************************************
+*                                             *
+*         Pour avancer dans les zones         *
+*                                             *
+***********************************************
+ 
+ 
+NXSTRG    MACRO
+          addl2    $4,\1
+          ENDM
+ 
+NXARRAY   MACRO
+          addl2    $4,\1
+          ENDM
+ 
+NXCONS    MACRO
+          addl2    $8,\1
+          ENDM
+ 
+ 
+***************************************************
+*                                                 *
+*         Manipule le registre FREE List          *
+*                                                 *
+***************************************************
+ 
+ 
+FREEL     MACRO
+          movl    r5,\1
+          ENDM
+ 
+SFREEL    MACRO
+          movl    \1,r5
+          ENDM
+ 

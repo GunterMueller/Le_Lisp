@@ -1,0 +1,88 @@
+pour poly
+
+(local "c "a "n )
+
+si :n < 1 alors [stop ]
+
+av :c td :a poly :c :a :n - 1
+
+fin
+
+ 
+
+pour poly50
+
+(local "a "n )
+
+fixexy - 25 (- 25 )
+
+poly 50 :a :n
+
+fin
+
+ 
+
+pour polyroll
+
+(local "c "a "b "n )
+
+si :n < 1 alors [stop ]
+
+repete 360 / :a [av :c td :a ]
+
+td :b
+
+polyroll :c :a :b :n - 1
+
+fin
+
+ 
+
+pour demopol
+
+te cache echelle 3
+
+ecris [* * * poly50 120 20 ]
+
+poly50 120 20
+
+te cache echelle 3
+
+ecris [* * * poly50 160 20 ]
+
+poly50 160 20
+
+te cache echelle 3
+
+ecris [* * * poly50 80 20 ]
+
+poly50 80 20
+
+te cache echelle 3
+
+ecris [* * * polyroll 20 90 30 15 ]
+
+polyroll 20 90 30 15
+
+te cache echelle 3
+
+ecris [* * * polyroll 20 60 45 15 ]
+
+polyroll 20 60 45 15
+
+te cache echelle 3
+
+ecris [* * * polyroll 20 40 60 20 ]
+
+polyroll 20 40 60 12
+
+te cache echelle 3
+
+ecris [* * * polyroll 5 20 40 12 ]
+
+polyroll 5 20 40 12
+
+fin
+
+ 
+

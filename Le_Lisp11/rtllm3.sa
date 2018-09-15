@@ -1,0 +1,332 @@
+#***************************************************************
+#
+#       le_lisp  llm3  :  runtime de llm3 pour vax unix
+#
+#***************************************************************
+#
+#                Jerome CHAILLOUX  (Chailloux.Vlsi)
+#                           I.N.R.I.A.
+#                domaine de voluceau,  rocquencourt
+#                b.p. 105,   78153 le chesnay cedex
+#                tel : (1) 954 90 20      poste 456
+#
+#****************************************************************
+
+          .set       plen,22
+          .set       pname,24
+          .set       alink,16
+
+
+          .globl      gc
+	  .globl      fstrg
+          .globl      itsoft
+          .globl      probj
+	  .globl      probjt
+          .globl      .undef
+          .globl      hashmax
+	  .globl      hashtab             # gestion du hache (in llinit)
+          .globl      maxbucket
+          .globl      csymb               # courant atome!
+          .globl      cpkgc               # courant 'package cell'
+          .globl      obase               # base de sortie courante
+ 
+          .globl      buildat
+          .globl      getpnam
+	  .globl      tryatom
+          .globl      crastrg
+ 
+#
+#   la fonction de hachage utilisee pour la table des symboles es :
+#         plen.w + pname(0).w + pname(2).w  modulo maxbucket
+#
+ 
+	.text
+ 
+
+#
+#         acces au p-name d'un atome :
+#         r0 <- adresse d'un buffer, r10 <- l'index, r1 <- atome
+#         termine le tampon r0 par un caractere null! 00 (merci un*x)
+#         retourne dans r11 le plen de r1
+#         ne doit pas toucher a r1 !
+#
+ 
+getpnam:
+#         calcul de la veritable adresse.
+          addl2     r10,r0              # adresse reelle du buffer.
+getpnr:   cmpl      r6,r1               # BTNUMB R1,GETPN2
+          jgtr      getpn2
+          cmpl      r6,r1               # BFSTRG R1,GETPN0
+          jgtr      getpn0
+          cmpl      r7,r1
+          jleq      getpn0
+          movl      (r1),r1             # recup la chaine
+          jbr       getpnr
+getpn0:   pushl     r1                  # pour le rendre propre.
+          clrl      r11                 # GPLEN R1,R11
+          movzwl    plen(r1),r11
+          addl2     $pname,r1           # r1 pointe sur le pname
+          jbr       getpn11             # traite le cas 0 caractere
+getpn1:   movb      (r1)+,(r0)+         # transfert le caractere
+getpn11:  sobgeq    r11,getpn1          # ca roule
+          clrb      (r0)+               # et termine par un 0!
+          movl      (r14)+,r1           # et on le rend super clean!
+          clrl      r11                 # clean, clean ...
+          movzwl    plen(r1),r11        # il le faut!
+          rsb
+getpn2:   pushl     $-1                 # marque de fin de digits
+          clrq      r11                 #  r12 = plen
+          incl      r12                 # r12 plen
+          movzwl    r1,r10              # pour faire les calculs
+          tstw      r10                 # test du signe (sur 16 bits)
+          bgeq      getpn3              # c'est positif
+          movb      $0x2d,(r0)+         # force un "-"
+          incl      r12                 # compte le pname
+          mnegw     r10,r10             # pour l'edition
+getpn3:   ediv      obase,r10,r10,-(sp) # r10 <- quo, r1 <- rem
+          beql      getpn4              # c'est fini
+          incl      r12                 # compte p-name
+          jbr       getpn3
+getpn4:   
+          movl      (r14)+,r10
+          cmpl      $-1,r10              # c'est le marqueur ?
+          jeql      getpn8               # oui : fin
+          bicl2     $0xffffffe0,r10      # sur qu'il ne reste pas des ..
+          addb2     $0x30,r10            # conv bin -> ascii
+          cmpb      r10,$0x39   
+          bleq      getpn7              # c'est Un chiffre
+          addb2     $7,r10              # passage en lettre
+getpn7:
+          movb      r10,(r0)+
+          jbr       getpn4
+getpn8:
+          movl      r12,r11             # le plen
+getpn9:   rsb                           # la c'est tout
+ 
+#
+#         allocation d'un symbole (tryatom, makstrg)
+#
+ 
+alatom:   movl      .undef,(r0)+        # force la cval par defaut
+          movl      r7,(r0)+            # MOVNIL dans la plist
+          clrl      (r0)+               # fval=0
+          movl      cpkgc,(r0)+         # pkgc = le courrant
+          clrl      (r0)+               # alink=0
+          clrw      (r0)+               # ptype+ftype=0
+          movl      tsymb,r10           # taille de l'atome
+          movw      r10,(r0)+           # plen
+          jeql      alato9              # c'est la symbole vide!
+          decl      r10                 # a cause de ce foutu djbr
+          movl      asymb,r13           # adresse du buffer
+alato1:   movb      (r13)+,(r0)+
+          sobgeq    r10,alato1          # pour tous les caracteres
+#         ajustement sur .align 2
+          clrb      (r0)+               # pour etre sur du '00' final!
+          addl2     $3,r0
+          bicl2     $3,r0
+alato9:   movl      r0,zsymb            # sauve le 1er mot libre de la zatom
+          rsb
+ 
+#
+#         crastrg : farbrique une chaine.
+#         pas tres fameux actuellemenent ?!?!?!
+#         r10 <- la taille, r0 <- l'adresse du buffer
+#         retourne dans r1 un pointeur sur la chaine.
+#
+ 
+crastrg:  movl      r10,tsymb          # range la taille de l'atome
+          movl      r0,asymb           # range l'adresse du buffer
+          movl      csymb,r0           # recup l'adresse 'current atom'
+          pushl     r0                 # qui sera l'adresse du nouvel atome
+          jsb       alatom
+          movl      (r14)+,r0
+          pushal    crastr2            # la continuation
+          pushl     r0
+          jbr       cratom
+crastr2:  movl      fstrg,r0           # recupere le pointeur free string
+          movl      (r0),r10           # le nouveau pointeur
+          movl      r1,(r0)            # force le pointeur de chaine.
+          movl      r0,r1              # c'est la valeur retournee!
+          movl      r10,fstrg          # nouveau free
+          rsb                          # et c'est tout.
+ 
+#
+#         intern un atome :
+#         r10 <- la taille, r0 <- l'adresse du buffer
+#
+ 
+tryatom:  movl      r10,tsymb          # range la taille de l'atome
+          movl      r0,asymb           # range l'adresse du buffer
+          movl      csymb,r0           # recup l'adresse 'current atom'
+          pushl     r0                 # qui sera l'adresse du nouvel atome
+          jsb       alatom             # alloue un nouveau symbole
+ 
+#         essai de conversion numerique
+ 
+          movl      (r14),r1
+          clrl      r10                # r10 sera la taille
+          clrl      r12                # r12 pour travailler
+          movzwl    plen(r1),r10       # mais ce n'est pas tout :
+          decl      r10                # pour le djbr!
+          addl2     $pname,r1          # r1 pointe sur le pname
+          clrl      r11                # accu = 0
+          clrl      r13                # signe = positif
+          movzbl    (r1)+,r12          # le 1er caractere
+          cmpb      r12,$0x2d          # signe '-' ?
+          jneq      crato3             # nan.
+          incl      r13                # indic nb negatif
+          sobgeq    r10,crato2         # il faut + d'1 caractere num.
+          jbr       cratom             # donc vers les symboles
+crato2:   movzbl    (r1)+,r12          # le caractere suivant du pname
+crato3:   cmpb      r12,$0x30          # test par rapport a '0'
+          jlss      cratom             # rate!
+          cmpb      r12,$0x39          # par rapport a '9'
+          jgtr      cratom             # encore rate!
+          subb2     $0x30,r12          # pour le horner
+          mulw2     $10,r11            # accu=accu*10
+          addw2     r12,r11            # accu=(accu*10)+car
+          sobgeq    r10,crato2         # pour tous les digits
+          cmpl      $0,r13             # test du signe
+          jeql      crato4             # c'est positif
+          mnegw     r11,r11            # change de signe l'accu
+crato4:   movl      r11,r1             # devient un pointeur lisp
+          movl      (r14)+,r13         # nettoie la pile
+          rsb                          # voila
+ 
+#         test de l'existence de l'atome
+cratom:   movl      (r14),r1           # adresse de l'atome a tester
+#         la fonction de hachage
+#         truc a savoir : si un debordement se produit durant la
+#         division, l'operande destination est inchange!!!!!
+#         l'indicateur c est simplement positionne.
+#         il faut donc s'assurer que ce cas ne se produit jamais.
+#         de plus la division EDIV se fait sur 64 bits!
+          movzwl    plen(r1),r10         # pnam(0).l + plen.w
+          jeql      craha7               # c'est le symbole vide ||
+          cmpw      r10,$2               # plus de 2 caracteres
+          jgeq      craha1               # oui
+          addb2     pname(r1),r10        # pnam(0).w
+          jbr       craha7
+craha1:   cmpw      r10,$4               # plus de 4 caracteres
+          jgeq      craha2               # oui
+          addw2     pname(r1),r10        # pnam(0).w
+          jbr       craha7
+craha2:   cmpw      r10,$6               # plus de 6 caracteres
+          jgeq      craha3               # oui
+          addw2     pname(r1),r10        # pnam(0).w
+          addw2     pname+2(r1),r10      # pname(2).w
+          jbr      craha7
+craha3:   addw2     pname(r1),r10        # pnam(0).w
+          addw2     pname+2(r1),r10      # pname(2).w
+          addw2     pname+4(r1),r10      # pname(4).w
+craha7:   clrl      r11                  # pour la division 64 / 32
+          ediv      $maxbucket,r10,r13,r11 # r13 <- quo, r11 <- rem
+          moval     *$hashtab[r11],r13   # adresse de la table de hachage
+          movl      r13,hsymb            # pour le snap final
+          movl      (r13),r13            # r13 <- le contenu du bucket
+          movl      r13,ysymb            # avant dernier pour le snap!
+          jbr       crato12              # et on demarre sur le test de fin.
+crato6:   movl      (r14),r1             # adresse de l'atome a tester
+          pushl     r13                  # sauve l'atome courant
+          movzwl    plen(r1),r10         # plen de l'atome a tester
+          cmpw      plen(r13),r10        # id a celui de l'atome courant ?
+          jneq      crato8               # nan : je passe au suivant.
+          addl2     $pname,r1            # pointe sur le pname
+          addl2     $pname,r13           # itou
+crato7:   cmpb      (r1)+,(r13)+         # test d'1 caractere
+          jneq      crato8               # rate, au suivant.
+          sobgtr    r10,crato7           # pour tous les caracteres
+#!!!      msg       4,<' ok '>
+          movl      (r14)+,r1            # le courant = la valeur retournee.
+          movl      (r14)+,r13           # nettoie la pile
+          movl      ysymb,r13            # le precedent
+          cmpl      r1,r13               # c'est le meme (le 1er de l'oblist)
+          jeql      crata9               # oui on se casse
+          movl      alink(r1),alink(r13) # snap!
+          movl      hsymb,r13            # hash-table!
+          movl      (r13),alink(r1)      # oblist!
+          movl      r1,(r13)             # done!
+crata9:   rsb                            # et voila
+crato8:   movl      (r14)+,r13           # recup adresse courante
+          movl      r13,ysymb            # sauve le precedent (pour le snap)
+          movl      alink(r13),r13       # atome suivant
+#         ?!?!?! il faut faire le test explicitement!
+crato12:  cmpl      $0,r13
+          jneq      crato6               # vers le test
+ 
+#!!!      msg       4,<' ko '>
+          movl      zsymb,csymb          # adresse de la fin de la zone atome
+          movl      (r14)+,r1            # adresse  du nouvel atome
+          movl      hsymb,r13            # adresse du dernier atome
+          movl      (r13),alink(r1)      # cre le nouveau lien
+          movl      r1,(r13)             # nouvel at = dernier atome
+          rsb
+#
+ 
+#
+#         buildat : construit alink+*type+plen+pname d'un atome
+#         r0 = pointeur sur la zone atome sur le alink
+#         r12 = l'adresse du debut de cet atome
+#
+ .globl buildat
+ 
+buildat:  movl      (r14)+,r1            # adresse des arguments
+#         fonction de hachage : meme remarque que precedement
+          movzwl    2(r1),r10            # plen.w
+          jeql      build1               # la taille = 0, bucket = 0
+          cmpw      r10,$2               # plus de 2 caracteres
+          jgeq      buildha1             # oui
+          addb2     4(r1),r10            # pnam(0).w
+          jbr       buildha7
+buildha1: cmpw      r10,$4               # plus de 4 caracteres
+          jgeq      buildha2             # oui
+          addw2     4(r1),r10            # pnam(0).w
+          jbr       buildha7
+buildha2: cmpw      r10,$6               # plus de 6 caracteres
+          jgeq      buildha3             # oui
+          addw2     4(r1),r10            # pnam(0).w
+          addw2     6(r1),r10            # pname(2).w
+          jbr       buildha7
+buildha3: addw2     4(r1),r10            # pnam(0).w
+          addw2     6(r1),r10            # pname(2).w
+          addw2     8(r1),r10            # pname(4).w
+#         il y a dans r10 la valeur a hacher.
+buildha7: clrl      r11                  # pour la division 64 / 32
+          ediv      $maxbucket,r10,r2,r11 # r2 <- quo, r11 <- rem
+build1:   movl      *$hashtab[r11],(r0)+ # force la a-link
+          movl      r12,*$hashtab[r11]   # new bucket.
+          movw      (r1)+,(r0)+          # force le *type
+          movzwl    (r1)+,r10            # recup le plen
+          movw      r10,(r0)+            # cre le plen de l'atome
+          jeql      build9               # il est = 0 (symbole void)
+build3:   movb      (r1)+,(r0)+          # cre le pname
+          sobgtr    r10,build3           # pour le nb de double mot idoine.
+          clrb      (r0)+                # pour etre sur du '00'
+build9:   addl2     $3,r0                # .align 2 (dynamique)
+          bicl2     $3,r0
+          movl      r0,csymb             # sauve la derniere adresse.
+          
+          jmp       (r1)                 # et on rentre facile.
+ 
+#
+#         donnees pour la gestion des atomes
+#
+ 
+	.data
+ 
+          .globl      csymb
+ 
+          .globl      bphys
+ 
+zsymb:    .long      0         # csymb temporaire
+asymb:    .long      0         # adresse du buffer a creer
+tsymb:    .long      0         # taille de l'atome a creer
+ysymb:    .long      0         # pointeur precedent pour le snap de l'oblist
+hsymb:    .long      0         # adresse du bucket courant
+ 
+#         chaine pour les impresions physiques
+ 
+bphys:    .space     128*4      # max 512 car + size
+
+ 
+ 

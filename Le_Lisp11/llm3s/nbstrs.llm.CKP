@@ -1,0 +1,808 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :  les fonctions sur les nombres et
+*                         les chaines de caracteres
+*
+****************************************************************
+*
+*                Jerome CHAILLOUX  (Chailloux.Vlsi)
+*                           I.N.R.I.A.
+*                Domaine de Voluceau,  Rocquencourt
+*                B.P. 105,   78153 Le Chesnay Cedex
+*                tel : (1) 954 90 20      poste 456
+*
+*****************************************************************
+ 
+ 
+ 
+          TITRE     NBSTRS       LLM3 : les nombres et les chaines.
+ 
+          XREF      BUILDAT,CSYMB                 pour MAKFNT
+          XREF      .UNDEF,.T,.VOID,.QUOTE
+          XREF      MSTACK,ERRFS                  pour CHKSTK
+          XREF      GC                            pour CONS
+ 
+          XREF      GETPNAM,CRASTRG
+          XREF      REENTER,THEEND
+          XREF      ERRNAA,ERRNNA,ERRNSA,ERRNLA
+          XREF      ERRWNA,ERRSTL,ERROVF
+          XREF      EVALCAR,EVALA1,PROGNA3,SAVEP,PROGN,APPLY
+          XREF      NREVERSE
+ 
+          XDEF      INI_NBS
+          XDEF      .STRING,.FFSYMBOL               pour GC
+ 
+MININT    EQU       $FFFF8001           l'entier minimum  -32...
+MAXINT    EQU       $00007FFF           l'entier maximum  +32...
+ 
+ 
+*
+*         Les buffers pour manipuler les chaines
+*         ======================================
+ 
+          IMPURE
+ 
+MAXSTRG   EQU       256                 taille max d'une chaine
+ 
+          XDEF      BUFSTR1,BUFSTR2
+ 
+BUFSTR1   DSBYTE    MAXSTRG           1er tampon
+BUFSTR2   DSBYTE    MAXSTRG           2eme tampon
+ 
+ 
+          PURE
+ 
+*
+*         Creation des symboles
+*         =====================
+*
+ 
+INI_NBS   EQU       *
+          NOLIST
+ 
+          MAKFNT    ADD1,0,.VOID,2,'1+'
+          MAKFNT    SUB1,0,.VOID,2,'1-'
+          MAKFNT    ABS,0,.VOID,3,'ABS'
+          MAKFNT    PLUS,0,.VOID,1,'+'
+          MAKFNT    DIFFER,0,.VOID,1,'-'
+          MAKFNT    TIMES,0,.VOID,1,'*'
+          MAKFNTS   QUO,0,.VOID,1,$2F00           le slash
+          MAKFNTS   REM,0,.VOID,1,$5C00           le back-slash
+          MAKFNT    SCALE,0,.VOID,5,'SCALE'
+          MAKFNT    LOGNOT,0,.VOID,6,'LOGNOT'
+          MAKFNT    LOGAND,0,.VOID,6,'LOGAND'
+          MAKFNT    LOGOR,0,.VOID,5,'LOGOR'
+          MAKFNT    LOGXOR,0,.VOID,6,'LOGXOR'
+          MAKFNT    LOGSHIFT,0,.VOID,8,'LOGSHIFT'
+          MAKFNT    DPN,0,.VOID,3,<'2**'>
+          MAKFNT    MSKFIELD,0,.VOID,10,<'MASK-FIELD'>
+          MAKFNT    LDBYTE,0,.VOID,9,<'LOAD-BYTE'>
+          MAKFNT    DPBYTE,0,.VOID,12,<'DEPOSIT-BYTE'>
+          MAKFNT    DPFIELD,0,.VOID,13,<'DEPOSIT-FIELD'>
+          MAKFNT    LDBT,0,.VOID,14,<'LOAD-BYTE-TEST'>
+          MAKFNT    ZEROP,0,.VOID,2,'=0'
+          MAKFNTS   NEROP,0,.VOID,3,$3C3E,$3000 <>0
+          MAKFNT    MINUSP,0,.VOID,6,'MINUSP'
+          MAKFNT    ODDP,0,.VOID,4,'ODDP'
+          MAKFNT    EVENP,0,.VOID,5,'EVENP'
+          MAKFNT    EQN,0,.VOID,1,'='
+          MAKFNTS   NEQN,0,.VOID,2,$3C3E  <>
+          MAKFNTS   GE,0,.VOID,2,$3E3D    >=
+          MAKFNTS   GT,0,.VOID,1,$3E00    >
+          MAKFNTS   LE,0,.VOID,2,$3C3D    <=
+          MAKFNTS   LT,0,.VOID,1,$3C00    <
+          MAKFNT    MIN,0,.VOID,3,'MIN'
+          MAKFNT    MAX,0,.VOID,3,'MAX'
+ 
+          MAKFNT    PACKLINE,0,.VOID,8,'PACKLINE'
+          MAKFNT    UNPACKLINE,0,.VOID,10,'UNPACKLINE'
+          MAKFNT    SEARCHLINE,0,.VOID,10,'SEARCHLINE'
+          MAKFNT    SRCHPAKLIN,0,.VOID,16,'SEARCHPACKEDLINE'
+ 
+          MAKFNT    STRING,0,.VOID,6,'STRING'
+          MAKFNT    CATEN,0,.VOID,8,'CATENATE'
+          MAKFNT    EQSTRING,0,.VOID,8,'EQSTRING'
+ 
+          MAKFNT    FFSYMBOL,0,.VOID,6,'SYMBOL'
+ 
+FALSE     MOVNIL    A1
+POPJ      RETURN
+ 
+ 
+*
+*         Fonctions numeriques
+*         ====================
+*
+*
+*         calcul arithmetique
+*
+ 
+*----------------------------------------
+          FENTRY    ADD1,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,ADD1ERR
+          INCR      A1,ADD1OVF
+          RETURN
+ADD1ERR   MOV       .ADD1,A2
+          BRA       ERRNNA
+ADD1OVF   MOV       .ADD1,A2
+          BRA       ERROVF
+ 
+*----------------------------------------
+          FENTRY    SUB1,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,SUB1ERR
+          DECR      A1,SUB1OVF
+          RETURN
+SUB1ERR   MOV       .SUB1,A2
+          BRA       ERRNNA
+SUB1OVF   MOV       .SUB1,A2
+          BRA       ERROVF
+ 
+*----------------------------------------
+          FENTRY    ABS,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,ABSERR
+          CBGE.S    A1,#0,ABSRET
+          NEGATE    A1
+ABSRET    RETURN
+ABSERR    MOV       .ABS,A2
+          BRA       ERRNNA
+ 
+ 
+*----------------------------------------
+          FENTRY    PLUS,SUBRVN
+*----------------------------------------
+          MOV       #0,A1               element neutre +
+          BRA.S     PLUS2
+PLUS1     POP       A2                  argument suivant
+          BFNUMB.S  A2,PLUSERR          il faut un nb!
+          PLUS      A2,A1,PLUSOVF
+PLUS2     SOBGEZ    A4,PLUS1
+          RETURN
+PLUSERR   MOV       A2,A1
+          MOV       .PLUS,A2
+          BRA       ERRNNA
+PLUSOVF   MOV       .PLUS,A2
+          BRA       ERROVF
+ 
+*----------------------------------------
+          FENTRY    DIFFER,SUBRVN
+*----------------------------------------
+          MOV       #0,A1               element neutre +
+          BTEQ      A4,#0,POPJ          (-) = 0
+          BFEQ      A4,#1,DIFF1         le cas (- n)
+          POP       A1                  le seul
+          BFNUMB.S  A1,DIFFERR2         il faut quand meme un nombre.
+          NEGATE    A1
+          RETURN
+DIFF1     DECR      A4
+          BRA.S     DIFF3
+DIFF2     POP       A2                  argument suivant
+          BFNUMB.S  A2,DIFFERR1         il faut un nb!
+          PLUS      A2,A1,DIFFOVF
+DIFF3     SOBGEZ    A4,DIFF2
+          POP       A2
+          BFNUMB.S  A1,DIFFERR2          il faut un nb aussi.
+          DIFF      A2,A1,DIFFOVF
+          RETURN
+DIFFERR1  MOV       A2,A1
+DIFFERR2  MOV       .DIFFER,A2
+          BRA       ERRNNA
+DIFFOVF   MOV       .DIFFER,A2
+          BRA       ERROVF
+ 
+ 
+*----------------------------------------
+          FENTRY    TIMES,SUBRVN
+*----------------------------------------
+          MOV       #1,A1               element neutre +
+          BRA.S     TIMES2
+TIMES1    POP       A2                  argument suivant
+          BFNUMB.S  A2,TIMESERR          il faut un nb!
+          TIMES     A2,A1,TIMEOVF
+TIMES2    SOBGEZ    A4,TIMES1
+          RETURN
+TIMESERR  MOV       A2,A1               le mauvais argument
+          MOV       .TIMES,A2
+          BRA       ERRNNA
+TIMEOVF   MOV       .TIMES,A2
+          BRA       ERROVF
+ 
+*----------------------------------------
+          FENTRY    QUO,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,QUOERR2
+          BFNUMB.S  A2,QUOERR1
+          QUO       A1,A2,QUOOVF
+          MOV       A2,A1
+          RETURN
+QUOERR1   MOV       A2,A1
+QUOERR2   MOV       .QUO,A2
+          BRA       ERRNNA
+QUOOVF    MOV       .QUO,A2
+          BRA       ERROVF
+ 
+*----------------------------------------
+          FENTRY    REM,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,REMERR2
+          BFNUMB.S  A2,REMERR1
+          REM       A1,A2,REMOVF
+          MOV       A2,A1
+          RETURN
+REMERR1   MOV       A2,A1
+REMERR2   MOV       .REM,A2
+          BRA       ERRNNA
+REMOVF    MOV       .REM,A2
+          BRA       ERROVF
+ 
+*----------------------------------------
+          FENTRY    SCALE,SUBR3
+*----------------------------------------
+          BFNUMB.S  A1,SCAERR3
+          BFNUMB.S  A2,SCAERR2
+          BFNUMB.S  A3,SCAERR1
+*          VALNB     A1,D1
+*          VALNB     A2,D2
+*          VALNB     A3,D3
+*          MULS      D2,D1
+*          DIVS      D3,D1               A1 = (A1 * A2) / A3
+*          CRANB     D1,A1
+          RETURN
+SCAERR1   MOV       A3,A1
+          BRA.S     REMERR1
+SCAERR2   MOV       A2,A1
+SCAERR3   MOV       .SCALE,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    LOGNOT,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,LOGNOERR
+*          VALNB     A1,D1
+*          NOT       D1
+*          CRANB     D1,A1
+          RETURN
+LOGNOERR  MOV       .LOGNOT,A2
+          BRA       ERRNNA
+ 
+ 
+*----------------------------------------
+          FENTRY    LOGAND,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,LOGAERR2
+          BFNUMB.S  A2,LOGAERR1
+          LAND      A2,A1
+          RETURN
+LOGAERR1  MOV       A2,A1
+LOGAERR2  MOV       .LOGAND,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    LOGOR,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,LOGOERR2
+          BFNUMB.S  A2,LOGOERR1
+          LOR       A2,A1
+          RETURN
+LOGOERR1  MOV       A2,A1
+LOGOERR2  MOV       .LOGOR,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    LOGXOR,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,LOGXERR2
+          BFNUMB.S  A2,LOGXERR1
+          LXOR      A2,A1
+          RETURN
+LOGXERR1  MOV       A2,A1
+LOGXERR2  MOV       .LOGXOR,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    LOGSHIFT,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,LOGSERR2
+          BFNUMB.S  A2,LOGSERR1
+*          VALNB     A1,D1
+*          VALNB     A2,D2
+*          CBLT.S    D2,#0,LOGSH2
+*          LSL.L     D2,D1
+*          CRANB     D1,A1
+          RETURN
+LOGSH2    EQU	*
+*          NEG.L     D2
+*          LSR.L     D2,D1
+*          CRANB     D1,A1
+          RETURN
+LOGSERR1  MOV       A2,A1
+LOGSERR2  MOV       .LOGSHIFT,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    DPN,SUBR1
+*----------------------------------------
+*         (de 2** (n) (logshift 1 n))
+ 
+          BFNUMB.S  A1,DPNERR
+*          VALNB     A1,D1
+*          MOV       #1,D2
+*          LSL.L     D1,D2
+*          CRANB     D2,A1
+          RETURN
+DPNERR    MOV       .DPN,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    MSKFIELD,SUBR3
+*----------------------------------------
+*         (de mask-field (val pos size)
+*             (logand (logshift (1- (2** size)) pos) val))
+ 
+          BFNUMB.S  A1,MSKFIER3
+          BFNUMB.S  A2,MSKFIER2
+          BFNUMB.S  A3,MSKFIER1
+*          MOV       #1,D1
+*          VALNB     A3,D2               size
+*          LSL.L     D2,D1
+*          SUBQ      #1,D1
+*          VALNB     A2,D2               pos
+*          LSL.L     D2,D1
+*          VALNB     A1,D2               val
+*          AND.L     D2,D1
+*          CRANB     D1,A1
+          RETURN
+MSKFIER1  MOV       A3,A1
+          BRA.S     MSKFIER3
+MSKFIER2  MOV       A2,A1
+MSKFIER3  MOV       .MSKFIELD,A2
+          BRA       ERRNNA
+ 
+ 
+*----------------------------------------
+          FENTRY    LDBYTE,SUBR3
+*----------------------------------------
+*         (de load-byte (val pos size)
+*             (logshift (mask-filed val pos size) (- pos)))
+ 
+          BFNUMB.S  A1,LDBYTER3
+          BFNUMB.S  A2,LDBYTER2
+          BFNUMB.S  A3,LDBYTER1
+*          MOV       #1,D1
+*          VALNB     A3,D2               size
+*          LSL.L     D2,D1
+*          SUBQ      #1,D1
+*          VALNB     A2,D2               pos
+*          LSL.L     D2,D1
+*          VALNB     A1,D2               val
+*          AND.L     D2,D1
+*          VALNB     A2,D2               pos
+*          LSR.L     D2,D1
+*          CRANB     D1,A1
+          RETURN
+LDBYTER1  MOV       A3,A1
+          BRA.S     LDBYTER3
+LDBYTER2  MOV       A2,A1
+LDBYTER3  MOV       .LDBYTE,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    LDBT,SUBR3
+*----------------------------------------
+*         (de load-byte-test (val pos size)
+*             (<>0 (load-byte val pos size)))
+ 
+          BFNUMB.S  A1,LDBTERR3
+          BFNUMB.S  A2,LDBTERR2
+          BFNUMB.S  A3,LDBTERR1
+*          MOV       #1,D1
+*          VALNB     A3,D2               size
+*          LSL.L     D2,D1
+*          SUBQ      #1,D1
+*          VALNB     A2,D2               pos
+*          LSL.L     D2,D1
+*          VALNB     A1,D2               val
+*          AND.L     D2,D1
+*          VALNB     A2,D2               pos
+*          LSR.L     D2,D1
+*          CRANB     D1,A1
+          BTEQ      A1,#0,FALSE
+          RETURN
+LDBTERR1  MOV       A3,A1
+          BRA.S     LDBTERR3
+LDBTERR2  MOV       A2,A1
+LDBTERR3  MOV       .LDBT,A2
+          BRA       ERRNNA
+ 
+ 
+*----------------------------------------
+          FENTRY    DPBYTE,SUBR0
+*----------------------------------------
+*?!?!?!?  a faire
+          RETURN
+ 
+*----------------------------------------
+          FENTRY    DPFIELD,SUBR0
+*----------------------------------------
+*?!?!?!   a faire
+          RETURN
+ 
+*
+*         Tests arithmetiques
+*         ===================
+*
+ 
+*----------------------------------------
+          FENTRY    ZEROP,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,ZERERR
+          BFEQ      A1,#0,FALSE
+          RETURN
+ZERERR    MOV       .ZEROP,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    NEROP,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,NERERR
+          BTEQ      A1,#0,FALSE
+          RETURN
+NERERR    MOV       .NEROP,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    MINUSP,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,MINPERR
+          CBLT      A1,#0,FALSE
+          RETURN
+MINPERR   MOV       .MINUSP,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    ODDP,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,ODDPERR
+*          VALNB     A1,D1
+*          AND.L     #1,D1
+          CBEQ      D1,#0,FALSE
+          RETURN
+ODDPERR   MOV       .ODDP,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    EVENP,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,EVENPERR
+*          VALNB     A1,D1
+*          AND.L     #1,D1
+*          CBNE      D1,#0,FALSE
+          RETURN
+EVENPERR  MOV       .EVENP,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    EQN,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,EQNERR2
+          BFNUMB.S  A2,EQNERR1
+*          VALNB     A1,D1
+*          VALNB     A2,D2
+*          CBNE      D1,D2,FALSE
+          RETURN
+EQNERR1   MOV       A2,A1
+EQNERR2   MOV       .EQN,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    NEQN,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,NEQNERR2
+          BFNUMB.S  A2,NEQNERR1
+*          VALNB     A1,D1
+*          VALNB     A2,D2
+*          CBEQ      D1,D2,FALSE
+          RETURN
+NEQNERR1  MOV       A2,A1
+NEQNERR2  MOV       .NEQN,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    GT,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,GTERR2
+          BFNUMB.S  A2,GTERR1
+*          VALNB     A1,D1
+*          VALNB     A2,D2
+*          CBLE      D1,D2,FALSE
+          RETURN
+GTERR1    MOV       A2,A1
+GTERR2    MOV       .GT,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    GE,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,GEERR2
+          BFNUMB.S  A2,GEERR1
+*          VALNB     A1,D1
+*          VALNB     A2,D2
+*          CBLT      D1,D2,FALSE
+          RETURN
+GEERR1    MOV       A2,A1
+GEERR2    MOV       .GE,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    LT,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,LTERR2
+          BFNUMB.S  A2,LTERR1
+*          VALNB     A1,D1
+*          VALNB     A2,D2
+*          CBGE      D1,D2,FALSE
+          RETURN
+LTERR1    MOV       A2,A1
+LTERR2    MOV       .LT,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    LE,SUBR2
+*----------------------------------------
+          BFNUMB.S  A1,LEERR2
+          BFNUMB.S  A2,LEERR1
+*          VALNB     A1,D1
+*          VALNB     A2,D2
+*          CBGT      D1,D2,FALSE
+          RETURN
+LEERR1    MOV       A2,A1
+LEERR2    MOV       .LE,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    MIN,SUBRVN
+*----------------------------------------
+          BTEQ      A4,#0,MINERR1
+          MOV       #MAXINT,D1
+          BRA.S     MIN2
+MIN1      POP       A1
+          BFNUMB.S  A1,MINERR2
+*          VALNB     A1,D2
+*          CBLT.S    D1,D2,MIN2
+          MOV       D2,D1
+MIN2      SOBGEZ    A4,MIN1
+          CRANB     D1,A1
+          RETURN
+MINERR1   MOV       A4,A1
+          MOV       .MIN,A2
+          BRA       ERRWNA
+MINERR2   MOV       .MIN,A2
+          BRA       ERRNNA
+ 
+*----------------------------------------
+          FENTRY    MAX,SUBRVN
+*----------------------------------------
+          BTEQ      A4,#0,MAXERR1
+          MOV       #MININT,D1
+          BRA.S     MAX2
+MAX1      POP       A1
+          BFNUMB.S  A1,MAXERR2
+*          VALNB     A1,D2
+*          CBGE.S    D1,D2,MAX2
+          MOV       D2,D1
+MAX2      SOBGEZ    A4,MAX1
+          CRANB     D1,A1
+          RETURN
+MAXERR1   MOV       A4,A1
+          MOV       .MAX,A2
+          BRA       ERRWNA
+MAXERR2   MOV       .MAX,A2
+          BRA       ERRNNA
+ 
+ 
+*
+*         Fonctions speciales pour manipuler des listes de caracteres
+*         tassees : c'est super pour Emacs!
+*         ===========================================================
+*
+ 
+*
+*         (PACKLINE l)        tasse la liste de caracteres l
+*
+*      (de packline (l)
+*          (let ((nl 0))
+*               (while (and l (= #\SP (car l))) (incr nl) (nextl l))
+*               (setq nl (cons nl))
+*               (while l (newl nl (+ logshift (nextl l) 8) (or (nextl l) 0))))
+*               (freverse nl)))))
+*
+ 
+*----------------------------------------
+          FENTRY    PACKLINE,SUBR1
+*----------------------------------------
+          CLR.L     D1                  nb d'espaces en tete
+          BRA.S     PACKL2
+PACKL1    MOV       CAR(A1),A2          caractere suivant
+          CBNE.S    A2,#$20,PACKL3      ce n'est pas un espace
+          INCR      D1                  compteur d'espace
+          MOV       CDR(A1),A1
+PACKL2    BTCONS.S  A1,PACKL1           la liste continue
+PACKL3    CRANB     D1,A3               A3 nb d'espaces
+          NCONS     A3                  A3 debut de la liste
+PACKL5    BFCONS.S  A1,PACKL9           tout est dit
+          MOV       CAR(A1),D1
+          LSL.L     #8,D1               position a gauche
+          MOV       CDR(A1),A1          avance dans la liste
+          MOV       CAR(A1),D2          2eme caractere
+          AND.L     #$FF,D2              masque les poids faibles (NIL = 0)
+          OR.L      D2,D1               D1 = les 2 nbs
+          CRANB     D1,A4               A4 idem internes
+          CONS      A4,A3
+          MOV       CDR(A1),A1          avance encore d'un coup
+          BRA       PACKL5              ca roule
+PACKL9    MOV       A3,A1               prepare le NREVERSE
+          BRA       NREVERSE
+ 
+*
+*         (UNPACKLINE l)
+*
+*         (de unpackline (l)
+*             (if (null l)
+*                 ()
+*                 (let ((nl (makelist (nextl l) #\SP)))
+*                      (while l
+*                         (newl nl (logshift (car l) -8))
+*                         (if (= (logand (car l) #$FF) 0)
+*                             (nextl l)
+*                             (newl nl (logand (nextl l) #$FF))))
+*                         (nreverse nl)))))))
+*
+ 
+*----------------------------------------
+          FENTRY    UNPACKLINE,SUBR1
+*----------------------------------------
+          BFCONS    A1,POPJ             rien a faire, il faut une liste
+          MOV       CAR(A1),A2          A2 <- nombre d'espaces
+          BFNUMB    A2,UNPACKER         ca c'est un bug!
+          MOVNIL    A4                  A4 est la liste en construction
+          MOV       #$20,A2             A2 <- le code de l'espace
+          BRA.S     UNPACK2             on bosse
+UNPACK1   CONS      A2,A4               CONStruit
+UNPACK2   SOBGEZ    A2,UNPACK1          <n> espaces.
+          BRA.S     UNPACK6
+UNPACK4   MOV       CAR(A1),A2          A2 <- le couple de cars
+          LBYTE     A2,A3,UNPACK5       A3 <- le gauche
+          CONS      A3,A4               on accroche
+UNPACK5   RBYTE     A2,A3,UNPACK6       A3 <- le droit
+          CONS      A3,A4               on accroche
+UNPACK6   MOV       CDR(A1),A1          couple de nb suivants
+          BTCONS    A1,UNPACK4          ca continue
+UNPACK9   MOV       A4,A1               prepare le NREVERSE
+          BRA       NREVERSE            et voila!
+UNPACKER  MOV       A2,A1               badarg
+          MOV       .UNPACKLINE,A2      fnt
+          BRA       ERRNNA              il fallait un nb en CAR!
+ 
+*
+*         (SEARCHLINE l lt)
+*         cherche lt dans l, retourne le bout de l commencant
+*         a lt.
+*
+*----------------------------------------
+          FENTRY    SEARCHLINE,SUBR2
+*----------------------------------------
+          BFCONS.S  A1,SEARCH9          il faut au moins 1 caractere
+SEARCH1   PUSH      A1                  sauve l
+          PUSH      A2                  sauve lt
+SEARCH2   MOV       CAR(A1),A3          A3 <- elem suiv de l
+          MOV       CAR(A2),A4          A4 <- elem suiv de lt
+          BFEQ.S    A3,A4,SEARCH3       rate!
+          MOV       CDR(A2),A2          avance dans lt
+          BTNIL.S   A2,SEARCH5          Bravo, je l'ai!
+          MOV       CDR(A1),A1          avance dans l
+          BTCONS.S  A1,SEARCH2          ca roule ...
+SEARCH3   POP       A2                  c'est rate, prepare le coup suivant
+          POP       A1                  le l precedent
+          BFCONS.S  A1,SEARCH9          l est termine.
+          MOV       CDR(A1),A1          avance dans l
+          BRA.S     SEARCH1             apres pareil
+SEARCH5   POP       A2                  c'est OK, je nettoie
+          POP       A1                  retourne le bout de l correct
+SEARCH9   RETURN    *                   et tout est dit
+ 
+ 
+*----------------------------------------
+          FENTRY    SRCHPAKLIN,SUBR2
+*----------------------------------------
+*?!?!?!?  a faire  ?!?!?!?!?!?
+          RETURN
+ 
+ 
+*============================================================
+*
+*         Les fonctions sur chaine de caracteres
+*
+*============================================================
+ 
+ 
+*         (STRING s)   [SUBR 1]   fonction de coercion
+ 
+*----------------------------------------
+          FENTRY    STRING,SUBR1
+*----------------------------------------
+          BTSTRG.S  A1,STRING4
+          BTCONS.S  A1,STRING9          le cas des listes de car
+          PNAM      A1,BUFSTR1
+          MAKSTRG   A1,BUFSTR1
+STRING4   RETURN    *
+STRING9   MOV       .STRING,A2          le nom
+          BRA       ERRNSA              il fallait une chaine.
+ 
+ 
+*
+*         (CATENATE str1 ... strN)   [SUBR N]
+*
+*----------------------------------------
+          FENTRY    CATEN,SUBRVN
+*----------------------------------------
+          PUSH      A4                  le nombre d'arguments de CATENATE
+          MOV       #0,A2               index dans le resultat
+          BRA.S     CATEN6              au tavail.
+CATEN2    XSPMOV    A4,A1               A1 <- l'arg suivant.
+          PUSH      A4                  sauve le compteur d'arguments
+          PUSH      A2                  sauve l'index du resultat
+          PNAM      A1,BUFSTR2          la chaine suivante
+          POP       A2                  index du resultat
+          MOV       #0,A3               index de la sous-chaine
+          BRA       CATEN4              au tranfert
+CATEN3    XMOVB     A3,BUFSTR2,A4       next char
+          CBGE      A2,#MAXSTRG,CATENER
+          MOVBX     A4,BUFSTR1,A2
+          INCR      A3
+          INCR      A2
+CATEN4    SOBGEZ    A1,CATEN3           car suivat
+          POP       A4                  nb d'arguments
+CATEN6    SOBGEZ    A4,CATEN2           il en reste
+          MAKSTRG   A2,BUFSTR1          on cre la chaine
+          ADJSTK    *                   clean, clean.
+          RETURN    *
+CATENER   MOV       A2,A1               max string length
+          MOV       .CATEN,A2
+          BRA       ERRSTL              "string too long"
+ 
+*
+*         (EQSTRING str1 str2)   SUBR2
+*         force la conversion des arguments
+*----------------------------------------
+          FENTRY    EQSTRING,SUBR2
+*----------------------------------------
+          BTSTRG.S  A1,EQSTR1           le 1er est ok
+          PUSH      A2                  sauve le 2eme
+          CALL      STRING              convertit le 1er
+          POP       A2                  recupere le 2eme
+EQSTR1    BTSTRG.S  A2,EQSTR2           le 2eme est ok aussi
+          PUSH      A1                  sauve le 1er
+          MOV       A2,A1               pour STRING
+          CALL      STRING              convertit le 2eme
+          POP       A2                  c'est commutatif
+EQSTR2    MOV       VAL(A2),A3          pas 2 val en operande
+          BTEQ.S    A3,VAL(A1),EQSTR9   c'est bon : retourne une chaine
+          MOVNIL    A1                  c'est faux
+EQSTR9    RETURN
+ 
+ 
+*
+*         Les fonctions speciales sur les symboles
+*
+*----------------------------------------
+          FENTRY    FFSYMBOL,SUBR1
+*----------------------------------------
+          BFSTRG.S  A1,SYMB1            ce n'est pas une chaine
+          MOV       VAL(A1),A1
+SYMB1     RETURN
+ 
+ 
+          END
+ 

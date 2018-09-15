@@ -1,0 +1,185 @@
+
+{
+	L e _ L i	s p   6 8	K  :  le lanceur Pascal
+	*******************************************
+}
+
+program	LELISP;
+
+     const
+	DFTMI	= 0;	{ Par defaut:  pas de Memoire	d'Image }
+	DFTSIZE	= 3;	{ Par defaut:  systeme Le_lisp a 24 k CONS }
+	DEFEXT	= 'LL';	{ Extension par defaut des fichiers Le_Lisp }
+
+     type
+	STRNG	= string[254];
+	STRNGPTR	= @STRNG;
+	EXT	= packed array [0..1] of char;	{ File extension }
+
+     var
+	MI	: integer;	{ Presence (ou non)	de la MI }
+	SIZE	: integer;	{ Taille du segment	a initialiser }
+	STARTUP	: STRNG;		{ Nom du fichier STARTUP }
+	F1, F2, F3: text;		{ Les fichiers de Le_Lisp }
+
+
+{ Le_Lisp	soi-meme }
+
+     procedure LLVSDOS   (MI : integer;
+		      SIZE : integer;
+		      var	STARTUP :	STRNG;
+		      var	F1, F2, F3 : text);	forward;
+
+
+{ Les autres petites merdes }
+
+     function  RMACLINE  : STRNGPTR; forward;
+				{ Retourne la ligne	de commande }
+     function  RMACAT    : STRNGPTR; forward;
+				{ Retourne le catalogue par defaut }
+     function  OPENF     (var	F: text; var FILENAME : STRNG;
+		      E :	EXT; MODE	: integer)	: integer; forward;
+				{ Ouvre un fichier }
+     function  CHECKF    (var	FILENAME : STRNG; E	: EXT)	: integer; forward;
+				{ Verifie	l'existence d'un fichier }
+(**)
+{ Decodage de la ligne de commande }
+
+(*	La ligne de commande est supposee avoir	le format
+		LELISP {<options>}
+	avec:	<options>	::= <option> <options>
+		<option>	::= -MI |	<size> | <startup> |
+		<size>	::= taille du segment a initialiser
+				(en nombre de plaques 128K)
+		<startup>	::= nom du fichier STARTUP
+				(format VERSAdos!)		*)
+
+     procedure DECODE;
+
+	var
+	     CMDPTR,		{ Pointeurs sur la ligne de commande }
+	     CATPTR    : STRNGPTR;	{    et sur le catalogue par defaut }
+	     I, J,		{ Curseurs sur la ligne de commande }
+	     N	     : integer;	{ Longueur de la ligne de commande }
+
+	procedure	SKIP;
+		{ Deplace	le curseur I en sautant les blancs }
+	     begin
+	     while (I < N) and (CMDPTR@[I] = ' ') do I :=	I + 1;
+	     end;
+
+	procedure	SCAN;
+		{ Deplace	le curseur J en sautant les non blancs }
+	     begin
+	     while (J < N) and (CMDPTR@[J] <> '	') do J := J + 1;
+	     end;
+(**)
+	procedure	OPTIONS;
+		{ Reconnait les options de la	ligne de commande }
+
+	     var	KEYWORD :	STRNG;
+
+	     procedure OPTMI;
+		     { Indicateur pour la Memoire d'Image }
+		begin
+		MI := 1;	{ On veut	la Memoire d'Image }
+		end;
+
+	     begin
+	     KEYWORD := COPY(CMDPTR@,I,J-I);
+	     if KEYWORD = '-MI' then OPTMI
+	     else;	{ Qu'est-ce qu'on fait en cas	d'erreur?	}
+	     end;
+
+	procedure	LOADSIZE;
+		{ Charge la taille du segment	a initialiser }
+	     var	K : integer;
+	     begin
+	     SIZE	:= 0;
+	     for K := I to J - 1 do
+		SIZE := SIZE*10 + ord(CMDPTR@[K]) - ord('0');
+	     end;
+
+	procedure	LOADFILE;
+		{ Charge le nom du fichier STARTUP }
+	     var	S : STRNG;
+	     begin
+	     STARTUP := COPY(CMDPTR@,I,J-I);
+	     S :=	STARTUP;
+	     if CHECKF(S,'LL') <> 0	{ Si le fichier ne se trouve pas }
+	     then			{    sur le catalogue par defaut, }
+		begin		{    on le prend sur :.LLINIT	}
+		S := concat('LLINIT.',STARTUP);
+		STARTUP := concat(S,'.LL');
+		end;
+	     end;
+(**)
+	begin	{ of the procedure DECODE }
+
+	{ Initialisation des parametres par defaut }
+	MI := DFTMI;
+	SIZE := DFTSIZE;
+
+	{ Initialisation du	STARTUP par defaut:	}
+	{    1.  fichier STARTUP.LL dans le catalogue courant }
+	{    2.  fichier LLINIT.SYSSTD.LL }
+	{    3.  Option startup dans la ligne de commande	}
+	CATPTR :=	RMACAT;
+	STARTUP := concat(CATPTR@,'.STARTUP.LL');
+	if CHECKF(STARTUP,'LL') <> 0 then STARTUP := 'LLINIT.SYSSTD.LL';
+
+	{ Decodage de la ligne de commande }
+	CMDPTR :=	RMACLINE;
+	I := 1;
+	N := length(CMDPTR@);
+	SKIP;
+	while I <	N do
+	     begin
+	     J :=	I;
+	     SCAN;
+	     if CMDPTR@[I] = '-'
+	     then	OPTIONS	{ Decodage des options }
+	     else
+	     if (CMDPTR@[I]	>= '0') and (CMDPTR@[I] <= '9')
+	     then	LOADSIZE	{ Si l'option commence par un	digit, c'est la }
+	     else	LOADFILE;	{    taille; sinon,	c'est le fichier startup. }
+	     I :=	J;
+	     SKIP;
+	     end;
+	end;
+(**)
+     procedure PUTSTR    (var	F : text;	var S : STRNG);
+	{ Ecriture de l'enregistrement S sur le	fichier F. }
+	begin
+	writeln(F,S);
+	end;
+
+
+{ On n'aura plus besoin de ces saloperies quand Jerome aura	fait son menage. }
+
+     function  OPENIN    (var	F : text;	var S : STRNG) : integer;
+	var  I : integer;
+	begin
+	OPENIN :=	OPENF(F,S,DEFEXT,0);
+	end;
+
+     function  OPENOU    (var	F : text;	var S : STRNG) : integer;
+	begin
+	OPENOU :=	OPENF(F,S,DEFEXT,1);
+	end;
+(**)
+{ Lancement de la machine }
+
+     begin
+
+     DECODE;
+
+   {   writeln(output,'Vas-y Jerome!');	  }
+
+     LLVSDOS(MI,SIZE,STARTUP,F1,F2,F3);
+
+     end.
+
+
+
+

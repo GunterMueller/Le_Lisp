@@ -1,0 +1,24 @@
+listes et mots		     relations		   instructions de controle
+--------------		     ---------		   ------------------------
+mot	    liste	     pluspetit?  <	   si		 repete
+phrase	    item	     plusgrand?  >	   teste	 fais
+prem  der   sp	sd	     egal?	 =	   sivrai	 stop
+mot?	    liste?	     nonegal?		   sifaux	 donne
+phrase?     membre?	     et  ou  non
+ 
+Operations numeriques	     definition 	   entrees/sorties
+---------------------	     ---------- 	   ---------------
+somme	    +	  hasard     relie	 local	   ecris	tape
+difference  -	  nombre?    chose	 pour	   lisliste	liscar
+produit     *		     chose?	 definis   im  imps	imts
+quotient    /		     primitives  defini?   efface	efps
+reste	    \		     primitive? 	   edite	ramene
+						   sauve	sauvetout
+commandes tortue				   fixedisque
+----------------
+mobile	   te	    origine	       commandes auto-chargeables
+nettoie    fixexy   cap  fixecap       --------------------------
+vt	   fixecurseur		       lexi    finlexi
+cache	   montre   gomme	       trace   detrace	 fintrace
+av   re   tg   td   lc	 bc
+

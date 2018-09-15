@@ -1,0 +1,716 @@
+	PAGE
+
+***********************************************************************
+*							*
+*	L E   L I S P   6 8 K   :   I/O physiques et fichiers	*
+*							*
+***********************************************************************
+
+
+PHYSIO	IDNT	1,1	LLM3 : les I/O physiques
+
+
+*==================================================
+*	Macros speciales d'entree/sortie
+*==================================================
+
+
+*
+*	Les macros de controle des dispositifs physiques : EPCI ACIA
+*	------------------------------------------------------------
+*
+
+*	EPCI adr,reg
+
+EPCI	MACRO
+	MOVE.L	\1,A0
+	BSR	PAS_EPCI
+	MOVE.L	A0,\2
+	ENDM
+
+*	EPCO adr,val
+
+EPCO	MACRO
+	MOVE.L	\1,A0
+	MOVE.L	\2,D0
+	BSR	PAS_EPCO
+	ENDM
+
+*	EPCS adr,reg
+
+EPCS	MACRO
+	MOVE.L	\1,A0
+	BSR	PAS_EPCS
+	MOVE.L	A0,\2
+	ENDM
+
+*
+*	Gestion du canal terminal
+*	-------------------------
+*
+
+*	TTYIN buff,reg,adr	ecrit le buffer puis lit un caractere dans reg
+*			branchemet a adr si erreur
+
+TTYIN	MACRO
+	LEA	\1,A0	le 1er arg est une adresse de buffer
+	BSR	PAS_TYI	fait le boulot
+	MOV	A0,\2	et range le caractere lu
+	TST	D0	c'est OK ?
+	BNE	\3	non : vers l'erreur
+	ENDM
+
+*	TTYO reg,adr	ecrit 1 caractere sur TTY (gere le buffer)
+*			branchement a adr si erreur
+
+TTYO	MACRO
+	PUSH	A4		pour travailler
+	MOV	PBUFTTY,A4	charge le pointeur sur le buffer TTY
+	CBLT.S	A4,\#500,\@	le buffer tient!
+	TTYOUT	ABUFTTY,\2	on vide le buffer
+	MOV	\#0,A4		l'index devient null
+\@	MOVBX	\1,BUFTTY,A4	charge le caractere dans le buffer
+	ADD.L	\#1,A4		actualise l'index
+	MOV	A4,PBUFTTY	range l'index
+	POP	A4		restaure le reg de travail
+	ENDM
+
+*	TTYOUT buff,adr		sort le buffer sur TTY
+*				branchement a adr si erreur
+
+TTYOUT	MACRO
+	LEA	\1,A0		ce doit etre une adresse
+	BSR	PAS_TYO		et voila
+	TST	D0		tout va bien ?
+	BNE	\2		non erreur!
+	ENDM
+
+*
+*	Gestion des fichiers ROM
+*	------------------------
+*
+
+*	ROMFILE	adr,cc	ouvre la ROM
+
+ROMFILE	MACRO
+	MOVE.L	\1,A0
+	BSR	PAS_ROM
+	MOVE.L	A0,\2
+	ENDM
+
+*	ROMIN	where,cc	recupere le caractere suivant
+
+ROMIN	MACRO
+	BSR	PAS_ROC
+	MOVE.L	A0,\1
+	ENDM
+
+*
+*	Gestion des fichiers
+*	--------------------
+*
+
+*	INFILE chan,file,cc 	ouverture d'un fichier d'entree
+
+INFILE	MACRO
+	MOVE.L	\1,D0		numero du canal
+	LEA	\2,A0		nom du fichier
+	BSR	PAS_OPI		on ouvre
+	MOVE.L	A0,\3		code erreur
+	ENDM
+
+*	INF chan,char	   lecture du caractere suivant sur fichier
+
+INF	MACRO
+	MOVE.L	\1,D0	canal
+	BSR	PAS_ICH	pascal
+	MOVE.L	A0,\2	transfert
+	ENDM
+
+*	INBF chan,adr,cc,nb	lecture de la ligne suivante sur fichier
+
+INBF	MACRO
+	MOVE.L	\1,D0	canal
+	LEA	\2,A0	adr
+	BSR	PAS_IBC	pascal
+	MOVE.L	A0,\3	le cc
+	MOVE.L	D0,\4	le nb de caracteres transferes
+	ENDM
+
+
+*	OUFILE  chan,file,cc	ouverture d'un fichier de sortie
+
+OUFILE	MACRO
+	MOVE.L	\1,D0		numero du canal
+	LEA	\2,A0		nom du fichier
+	BSR	PAS_OPO		on ouvre
+	MOVE.L	A0,\3		code erreur
+	ENDM
+
+*	OUS chan,size,adrbuf	sort une chaine de caracteres
+*				en memoire
+
+OUS	MACRO
+	MOVE.L	\1,D0	prepare le numero du canal
+	MOVE.L	\2,D1	prepare la taille
+	LEA	\3,A0	prepare l'adresse
+	BSR	OUSTR	et impression de la chaine
+	ENDM
+
+
+*	FCLOS ch,cc	   ferme le canal ch
+
+FCLOS	MACRO
+	MOVE.L	\1,D0		numero du canal
+	BSR	PAS_CLO		et on le ferme
+	MOV	A0,\2		retourne le cc
+	ENDM
+
+*	FDELE fil,cc	   detruit le fichier fil
+
+FDELE	MACRO
+	LEA	PLEN(\1),A0
+	BSR	PAS_DEL
+	MOV	A0,\2		le cc
+	ENDM
+
+*	FRENA old,new,cc	   renomme un fichier
+
+FRENA	MACRO
+	LEA	PLEN(\2),A0
+	MOVE.L	A0,D0
+	LEA	PLEN(\1),A0
+	BSR	PAS_REN
+	MOV	A0,\3
+	ENDM
+
+*	CORSAV file,cc	sauve iune image memoire
+
+CORSAV	MACRO
+	LEA	PLEN(\1),A0
+	BSR	PAS_CORSAV
+	MOV	A0,\2
+	ENDM
+
+*	COREST file,cc	restaure une image memoire
+
+COREST	MACRO
+	CLR.L	D0		canal INPUT
+	BSR	PAS_CLO		on le ferme
+	LEA	PLEN(\1),A0
+	BSR	PAS_COREST
+	MOV	A0,\2
+	ENDM
+
+
+	SECTION	10
+
+	XREF	GC,TRYATOM
+	XREF	SERROR,ERRNLA,ERRNNA,ERRNAA
+	XREF	IREAD,.CTRLZ
+	XREF	EVALA1,APPLY,DE
+	XREF	BUILDAT,OUSTR,POPJ,FALSE,TRUE,REENTER
+
+	XREF	PAS_EPCI,PAS_EPCO,PAS_EPCS
+	XREF	PAS_TYI,PAS_TYO
+	XREF	PAS_OPI,PAS_OPO,PAS_ICH,PAS_IBC
+	XREF	PAS_CLO,PAS_DEL,PAS_REN
+	XREF	PAS_CORSAV,PAS_COREST
+	XREF	PAS_ROM,PAS_ROC
+	XREF	.UNDEF,.T,.QUOTE,.FCONS,.MCONS,.LIST
+
+	XDEF	INI_PIO		pour l'initialiseur
+	XDEF	INPUTI		ouverture fichir initial
+	XDEF	.FINITIAL
+	XDEF	ISTREAM,OSTREAM
+	XDEF	INPHY,OUTPHY
+
+*
+*	 Initialise les I/O physiques
+*
+
+INI_PIO
+
+	PUSH	A0		?!?!?! pour MAKFNT!!!!
+	MOV	\#0,PBUFTTY	raz index sur buffer TTY
+	MOV	\#0,A1		index dans la ligne
+	MOVBX	\#0,LIGNE,A1	rien dans la ligne
+	POP	A0		?!?! idem
+	MOV	\#0,POLIG		en debut de ligne
+	MOVNIL	ISTREAM		stream entree = console
+	MOVNIL	OSTREAM		stream sortie = console
+
+*				Creation des atomes
+
+	NOLIST
+	MAKCST	FINITIAL,0,10,<'startup.ll'>
+	MAKFNT	EPCI.I,0,7,'EPCI-IN'
+	MAKFNT	EPCI.O,0,8,'EPCI-OUT'
+	MAKFNT	EPCI.S,0,11,'EPCI-STATUS'
+	MAKFNT	TYI,0,3,'TYI'
+	MAKFNT	TYO,0,3,'TYO'
+	MAKFNT	TYOL,0,4,'TYOL'
+	MAKFNT	TYFLUSH,0,7,'TYFLUSH'
+	MAKFNT	ROMFI,0,7,'ROMREAD'
+	MAKFNT	INPUT,0,5,'INPUT'
+	MAKFNT	INCHAN,0,6,'INCHAN'
+	MAKFNT	OUTCHAN,0,7,'OUTCHAN'
+	MAKFNT	LOAD,0,4,'LOAD'
+	MAKFNT	LOADFILE,0,8,'LOADFILE'
+	MAKFNT	OUTPUT,0,6,'OUTPUT'
+	MAKFNT	CLOSE,0,5,'CLOSE'
+	MAKFNT	DELETFI,0,10,'DELETEFILE'
+	MAKFNT	RENAMFI,0,10,'RENAMEFILE'
+	MAKFNT	SAVECOR,0,9,'SAVE-CORE'
+	MAKFNT	RESTCOR,0,12,'RESTORE-CORE'
+
+*!!!	LIST
+*
+	RETURN
+
+
+*
+*	Fonctions sur les dispositifs d'entree/sortie
+*	---------------------------------------------
+*
+
+	FENTRY	EPCI.I,SUBR1
+*---
+	EPCI	A1,A1
+	RETURN
+
+	FENTRY	EPCI.S,SUBR1
+*---
+	EPCS	A1,A1
+	RETURN
+
+	FENTRY	EPCI.O,SUBR2
+*---
+	EPCO	A1,A2
+	BRA	TRUE
+
+
+*
+*	Fonctions sur le canal terminal
+*	-------------------------------
+*
+
+	FENTRY	TYI,SUBR0
+*---
+	TTYIN	ABUFTTY,A1,TYIERR	sort le buffer courant et lit le car.
+	MOV	\#0,PBUFTTY	raz index sur le buffer TTY
+	RETURN
+TYIERR	MOV	\#0,PBUFTTY	raz index sur le buffer TTY (on suppose)
+	MOV	.TYI,A2		nom de la fonction
+	MOV	\#ER_IO,A3 	    code erreur
+	CRANB	D0,A1		bad-arg
+	BRA	SERROR
+
+	FENTRY	TYO,SUBR1
+*---
+	BFNUMB.S	A1,TYOERR 	il faut absolument un nb!
+TYOI	MOV	PBUFTTY,A4	charge l'index
+	CBLT.S	A4,\#500,TYO1	ca rentre dans le buffer
+	TTYOUT	ABUFTTY,TTYOERR	vide le buffer
+	MOV	\#0,A4		raz l'index
+TYO1	MOV	A1,D1		histoire de calculer
+	LSR.L	\#8,D1		isole le caractere de droite
+	AND.L	\#$FF,D1		alors ?
+	BEQ.S	TYO2		ya rien!
+	MOVBX	D1,BUFTTY,A4	charge le car de droite
+	ADD.L	\#1,A4		actualise l'index
+TYO2	MOV	A1,D1		pour faire des calculs
+	AND.L	\#$FF,D1		isole le caractere
+	BEQ.S	TYO3		rien a faire : null is null !
+	MOVBX	D1,BUFTTY,A4	charge le caractere dans le buffer
+	ADD.L	\#1,A4		actualise l'index
+TYO3	MOV	A4,PBUFTTY	sauve le nouvel index
+	RETURN
+TYOERR	MOV	.TYO,A2		nom de la fonction
+	BRA	ERRNNA
+TTYOERR	EQU	*		si erreur d'I/O
+	MOV	\#0,PBUFTTY	raz pointeur buffer TTY!
+	CRANB	D0,A1		bad-arg
+	MOV	.TYO,A2		nom de la fonction
+	MOV	\#ER_IO,A3 	    code erreur
+	BRA	SERROR
+
+	FENTRY	TYOL,SUBR1
+*---
+	MOV	A1,A2		ca facilite le retour
+	BRA.S	TYOL2		et on y va
+TYOL1	MOV	CAR(A2),A1	le caractere suivant
+	MOV	CDR(A2),A2	avance dans la liste
+	CALL	TYOI		sortie d'1 caractere (interne)
+TYOL2	BTLIST	A2,TYOL1		ca continue
+	BRA	TRUE		retourne toujours T
+
+	FENTRY	TYFLUSH,SUBR0
+*---
+	TTYOUT	ABUFTTY,TTYOERR	vide le buffer
+	MOV	\#0,PBUFTTY	raz l'index sur ce buffer
+	BRA	TRUE		et retourne toujours T.
+
+
+*
+*	INPHY  :	 Acces au caractere physique en entree
+*	doit mettre dans A4 le caractere suivant.
+*	------------------------------------------------
+*
+
+*
+*	Entree clavier avec editeur de ligne.
+*
+
+INPHY
+	PUSH	A3
+	MOV	POLIG,A3		recup le pointeur de ligne
+	XMOVB	A3,LIGNE,A4	A4 <- le caractere
+	BTEQ.S	A4,\#0,INPHY1	c'etait la fin de la ligne
+	ADD.L	\#1,A3		actualise lepointeur de ligne
+	MOV	A3,POLIG		on le range
+	POP	A3		et restaure A3
+	RETURN	*		rapide non ?
+
+*	Lecture d'une ligne sur terminal
+
+INPHY1
+	BTNUMB	ISTREAM,INCHF	lecture d'un fichier
+	BFNIL	ISTREAM,INCHR	lecture d'une ROM
+	TTYOUT	PTINT,TTYOERR	sort '? '
+	PUSH	A4		pour travailler
+INPHY2
+	MOV	\#0,A4		index sur la ligne
+INPHY3
+	TTYIN	ABUFTTY,A3,TYIERR	lecture sur TTY
+	MOV	\#0,PBUFTTY	raz index buff TTY
+	CBEQ	A3,\#8,INPHY6	back-space ?
+	CBEQ	A3,\#$7F,INPHY6	rub-out ?
+	CBEQ	A3,\#24,INPHY8	ctrl X (delete line)
+	CBEQ	A3,\#$0D,INPHY9	return (fin de ligne)
+	CBLT.S	A3,\#32,INPHY5	car control (echo a la dec)
+INPHY4
+	TTYO	A3,TTYOERR	echo du caractere
+	MOVBX	A3,LIGNE,A4	charge le car dans la ligne
+	ADD.L	\#1,A4		incremente l'index
+	BRA	INPHY3		au suivant
+INPHY5
+	PUSH	A3		sauve le caractere a echoer
+	TTYO	\#$5E,TTYOERR	sort un chapeau
+	ADD.L	\#64,A3		conversion en lettre capitale
+	TTYO	A3,TTYOERR	on la sort
+	POP	A3		recupere le caractere a charger
+	BRA	INPHY4		vers le chargement normal
+INPHY6
+	BTEQ	A4,\#0,INPHY3	on est deja en debut de ligne !
+	SUB.L	\#1,A4		m.a.j. index sur la ligne
+	XMOVB	A4,LIGNE,A3	A3 <- le car precedent
+	CBLT.S	A3,\#32,INPHY7	c'est un caractere control a effacer
+	TTYOUT	PTRUB1,TTYOERR	bs-sp-bs l'ancien caractere
+	BRA	INPHY3		caractere suivant
+INPHY7
+	TTYOUT	PTRUB2,TTYOERR	bs-sp-bs-bs-sp-bs (pour ^x)
+	BRA	INPHY3		caractere suivant
+INPHY8
+	TTYOUT	PTCRX,TTYOERR	\ rc lf ? sp  (indic ligne detruite)
+	BRA	INPHY2		et re-init la ligne
+INPHY9
+	TTYOUT	PTCRLF,TTYOERR	ecrit rc-lf
+INPHYC
+	MOVBX	A3,LIGNE,A4	force return
+	ADD.L	\#1,A4		actualise l'index
+	MOVBX	\#$0A,LIGNE,A4	force line-feed
+	ADD.L	\#1,A4		actualise l'index
+	MOVBX	\#0,LIGNE,A4	indique la fin du buffer
+	POP	A4		restaure le reg de travail
+	MOV	\#0,A4		index du 1er caractere
+	XMOVB	A4,LIGNE,A4	A4 <- le 1er caractere de la ligne
+	MOV	\#1,POLIG		inex courant sur la ligne
+	POP	A3		restaure le 2eme reg de travail
+	RETURN	*		That's all folks
+
+*	Lecture d'une ligne en ROM
+
+INCHR	EQU	*
+	PUSH	A4		pour travailler
+	MOV	\#0,A4		index sur la ligne
+	BRA.S	INCHR3
+INCHR2	MOVBX	A3,LIGNE,A4	charge le car dans la ligne
+	ADD.L	\#1,A4		actualise l'index
+INCHR3	ROMIN	A3		caractere suivant
+	BTEQ.S	A3,\#$0D,INPHYC	c'est la fin de la ligne
+	BFEQ.S	A3,\#0,INCHR2	c'est un beau caractere
+	MOVBX	\#26,LIGNE,A4	force le ^Z = EOF
+	ADD.L	\#1,A4		actualise A4
+	MOV	\#$0D,A3		simule la fin de ligne
+	MOVNIL	ISTREAM		apres ce sera toujours la console
+	BRA	INPHYC		et c'est tout.
+
+*	Lecture d'une ligne sur fichier
+
+INCHF	EQU	*
+	PUSH	A4		doit en sauver 1 encore
+	INBF	ISTREAM,LIGNE,A3,A4	lecture nouvelle ligne
+	BTEQ.S	A3,\#0,INCHF1	tout s'est bien passe
+	MOVBX	\#26,LIGNE,A4	force le car ^Z
+	ADD.L	\#1,A4		m.a.j. A4
+INCHF1	MOV	\#$0D,A3		pour forcer une fin de ligne.
+	BRA	INPHYC		et apres c'est pareil
+
+
+*
+*	OUTPHY  :  sortie physique d'un buffer (taille A1, adresse A2)
+*	--------------------------------------------------------------
+*
+
+OUTPHY	EQU	*
+	MOV	OSTREAM,D0	canal
+	MOV	A1,D1		la taille
+	MOV	A2,A0		adresse
+	BSR	OUSTR
+	RETURN
+
+
+*	Fonction de lecture de la ROM
+*	-----------------------------
+
+	FENTRY	ROMFI,SUBR1
+*---
+	MOV	.ROMFI,A2 	en cas d'erreur
+	BFNUMB	A1,ERRNNA 	il faut un nb (une adresse)
+	ROMFILE	A1,A1		on ouvre la memoire
+	BFEQ.S	A1,\#0,ROMFI8	ca va pas!
+	MOV	.T,ISTREAM	== lecture memoire
+	BRA	TRUE		retourne toujours T
+ROMFI8	MOV	.ROMFI,A2 	le nom de la fonction
+	MOV	\#ER_IO,A3
+	BRA	SERROR		vers les erreurs standards
+
+
+*
+*	Fonctions sur les fichiers
+*	--------------------------
+*
+
+	FENTRY	INPUT,SUBRV1
+*---
+	MOV	.INPUT,A2 	en cas d'erreur
+	BFATOM	A1,ERRNAA 	il faut un atome litteral
+	BFEQ.S	ISTREAM,\#0,INPUTI	si ce n'est pas deja un fichier
+	FCLOS	\#0,A3		on ferme le fichier disque deja ouvert
+*?!?!?!	BFEQ.S	A3,\#0,INPUT7	erreur dans le CLOSE 0
+*
+*	Entree pour l'ouverture du fichier initial
+*
+INPUTI	EQU	*
+	BFNIL.S	A1,INPUT2 	on ouvre un vrai fichier
+	MOVNIL	ISTREAM		indic console
+	BRA	TRUE		et retourne T
+INPUT2
+	PNAM	A1,FNAME,\#0	recupere le nom du fichier
+	INFILE	\#0,FNAME,A1		ouverture canal 0
+	BFEQ.S	A1,\#0,INPUT8	ya une erreur
+	MOV	\#0,ISTREAM	indic fichier
+	BRA	TRUE		et retourne T
+INPUT7	MOV	A3,A1		A1 <- le code erreur
+INPUT8	MOV	.INPUT,A2 	nom de la fonction
+	MOV	\#ER_IO,A3 	    numero de l'erreur
+	BRA	SERROR		vers les erreurs standards
+
+
+*
+*	(LOAD file)  FSUBR
+*
+
+	FENTRY	LOAD,SUBRF
+*---
+	BTEQ.S	ISTREAM,\#1,LIBRAR8	LOAD in LOAD !
+	MOV	CAR(A1),A1	A1 <- le nom du fichier
+	BTATOM.S	A1,LOAD0		c'est tout bon
+	MOV	.LOAD,A2		le nom de la fonction
+	BRA	ERRNAA		il fallait un symbole
+LOAD0	PNAM	A1,FNAME,\#0	recupere le nom du fichier
+	INFILE	\#1,FNAME,A1		ouverture canal 1 (LOAD)
+	BFEQ.S	A1,\#0,LIBRAR8	ya une erreur
+	PUSH	ISTREAM		sauve l'ancien indic
+	MOV	\#1,ISTREAM	indic fichier LOAD
+LIBRAR1	CALL	IREAD
+	BTEQ.S	A1,.CTRLZ,LIBRAR2	c'est la fin de fichier
+	CALL	EVALA1
+	BRA.S	LIBRAR1
+LIBRAR2	FCLOS	\#1,A1		on ferme le fichier.
+	POP	ISTREAM		revient sur le stream precedent
+	BTEQ	A1,\#0,TRUE	tout est OK
+*				LIBRAR8 doit suivre
+LIBRAR8	EQU	*		si erreur
+	MOV	.LOAD,A2		nom de la fonction
+	MOV	\#ER_IO,A3 	    numero de l'erreur
+	BRA	SERROR		vers les erreurs standards
+
+*
+*	(LOADFILE file)   SUBR1
+*
+	FENTRY	LOADFILE,SUBR1
+*---
+	BTEQ.S	ISTREAM,\#1,LIBRAR8	LOAD in LOAD
+	BTATOM.S	A1,LOAD0		apres c'est pareil
+	MOV	.LOADFILE,A2	la fonction qui ne va pas
+	BRA	ERRNAA		il fallait un symbole
+
+*
+*	(OUTPUT file)  SUBR1
+*
+	FENTRY	OUTPUT,SUBRV1
+*---
+	MOV	.OUTPUT,A2	en cas d'erreur
+	BFATOM	A1,ERRNAA 	il faut un atome litteral
+	BFEQ.S	OSTREAM,\#0,OUPUT1	si ce n'est pas deja un fichier
+	FCLOS	\#3,A3		on ferme le fichier disque deja ouvert
+	BFEQ.S	A3,\#0,OUPUT7	le CLOSE a rate!
+OUPUT1	BFNIL.S	A1,OUPUT2 	on ouvre un vrai fichier
+	MOVNIL	OSTREAM		indic console
+	BRA	TRUE		et retourne T
+OUPUT2	PNAM	A1,FNAME,\#0	nom du fichier
+	OUFILE	\#3,FNAME,A1		ouverture canal 3 systematiquement
+	BFEQ.S	A1,\#0,OUPUT8	ya une erreur
+	MOV	\#0,OSTREAM	indic fichier
+	BRA	TRUE		et retourne T
+OUPUT7	MOV	A3,A1		le code d'erreur est dans A1
+OUPUT8	MOV	.OUTPUT,A2	nom de la fonction
+	MOV	\#ER_IO,A3 	    numero de l'erreur
+	BRA	SERROR		vers les erreurs standards
+
+
+*
+*	Fonctions sur les canaux
+*	------------------------
+
+*	(INCHAN)
+
+	FENTRY	INCHAN,SUBR0
+*---
+	MOV	ISTREAM,A1	le canal d'entree courant
+	RETURN	*
+
+*	(OUTCHAN)
+
+	FENTRY	OUTCHAN,SUBR0
+*---
+	MOV	OSTREAM,A1	le canal de sortie courant
+	RETURN	*
+
+
+*
+*	Fonctions de manipulation des fichiers
+*	--------------------------------------
+*
+
+*	(CLOSE n)
+
+	FENTRY	CLOSE,SUBR1
+*---
+	BFNUMB.S	A1,CLOSER1
+	FCLOS	A1,A1			A1 code d'erreur
+	BTEQ	A1,\#0,TRUE
+	MOV	.CLOSE,A2 		la fonction
+	MOV	\#ER_IO,A3 		l'erreur IO
+	BRA	SERROR			et provoque l'erreur
+CLOSER1	MOV	.CLOSE,A2
+	BRA	ERRNNA
+
+
+*	(DELETEFILE file)
+
+	FENTRY	DELETFI,SUBR1
+*---
+	BFATOM.S	A1,DELETER1
+	FDELE	A1,A1
+	BTEQ	A1,\#0,TRUE
+	MOV	.DELETFI,A2		la fonction
+	MOV	\#ER_IO,A3 		l'erreur IO
+	BRA	SERROR			et provoque une erreur
+DELETER1	MOV	.DELETFI,A2
+	BRA	ERRNAA
+
+*	(RENAMEFILE old new)
+
+	FENTRY	RENAMFI,SUBR2
+*---
+	BFATOM.S	A1,RENAMER2
+	BFATOM.S	A2,RENAMER1
+	FRENA	A1,A2,A1
+	BTEQ	A1,\#0,TRUE
+	MOV	.RENAMFI,A2		la fonction
+	MOV	\#ER_IO,A3 		l'erreur IO
+	BRA	SERROR			et provoque une erreur
+RENAMER1	MOV	A2,A1
+RENAMER2	MOV	.RENAMFI,A2
+	BRA	ERRNAA
+
+
+*
+*	Fonctions de gestion de l'image memoire
+*
+
+*	(SAVE-CORE filename)
+
+	FENTRY	SAVECOR,SUBR1
+*---
+	BFATOM.S	A1,SAVECERR	il faut vraiment un filename atomique
+	CORSAV	 A1,A1		 retourne le CC
+	BTEQ	A1,\#0,TRUE	tout va bien
+	MOV	.SAVECOR,A2	la fonction
+	MOV	\#ER_IO,A3 	le type
+	BRA	SERROR		provoque l'erreur
+SAVECERR	MOV	.SAVECOR,A2
+	BRA	ERRNNA		il fallait un atome litteral
+
+*	(RESTORE-CORE filename)
+
+	FENTRY	RESTCOR,SUBR1
+*---
+	BFATOM.S	A1,RESTCERR	il faut vraiment un atome litteral
+	COREST	A1,A1		retourne le CC
+	BTEQ	A1,\#0,TRUE	tout va bien
+	MOV	.RESTCOR,A2	la fonction
+	MOV	\#ER_IO,A3 	le type
+	BRA	SERROR		provoque l'erreur
+RESTCERR	MOV	.RESTCOR,A2
+	BRA	ERRNNA		il fallait un atome litteral
+
+
+*
+*	 Donnees utilisees pour les fichiers
+*	------------------------------------
+*
+
+PTINT	DC.W	2,$3F20			? sp
+PTCRX	DC.W	5,$5C0D,$0A3F,$2000 	\ cr lf ? sp
+PTCRLF	DC.W	2,$0D0A			cr lf
+PTRUB1	DC.W	3,$0820,$0800		bs sp bs
+PTRUB2	DC.W	6,$0820,$0808,$2008 	bs sp bs bs sp bs
+
+
+	SECTION	15
+
+
+ISTREAM	DC.L	0	NIL si entree console,
+*			0 = entree fichier INPUT
+*			1 = entree fichier LOAD
+*
+OSTREAM	DC.L	0	NIL si sortie console
+*
+PBUFTTY	DC.W	0	pointeur sur le buffer TTY
+ABUFTTY	DC.W	0	adresse du buffer TTY
+BUFTTY	DS.W	256	buffer de 512 caracteres!
+*
+ALIGNE	DC.W	0	nb de car de la chaine LIGNE
+   XDEF LIGNE
+LIGNE	DS.W	72	ligne en entree (144 caracteres)
+   XDEF POLIG
+POLIG	DC.L	0	pointeur sur cette ligne.
+*
+   XDEF FNAME
+FNAME	DS.W	20	noms des fichiers
+
+	END

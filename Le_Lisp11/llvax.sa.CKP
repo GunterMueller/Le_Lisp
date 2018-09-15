@@ -1,0 +1,522 @@
+#***********************************************************
+#
+#		l e    l i s p    vax  unix
+#		  systeme  unix
+#
+#************************************************************
+#
+#		  Jerome CHAILLOUX		
+#
+#
+#	     domaine de voluceau, rocquencourt		*
+#	     b.p. 105   78153 le chesnay cedex		*
+#	     tel : (1) 954 90 20   poste 456		*
+#						*
+#************************************************************
+
+
+	.text
+
+	.globl	ll68k
+
+ll68k:	jbr	ll68kgo
+	nop
+
+	.text
+
+	.globl	ll68kgo
+	.globl	reenter
+	.globl	theend		# in llinit (llm3)
+
+ll68kgo:
+	jbr	ll68kc		# cold start
+	jbr	reenter		# warm start
+	jbr	theend		# stupid start
+
+ll68kc:
+	jbr	sysini
+
+#
+#	chargement du module dependant du systeme :
+#		 - de point d'entree : sysini
+#		 - il doit revenir au moyen d'un jbr llinit
+#
+#	au retour, les mots suivants sont charges :
+#		smemi scode sarray sstrg ssymb scons (toutes les tailles)
+#		bmemi (l'adresse de la 1ere zone)
+#		(tous les autres mots seront initialises par llinit)
+#
+#
+#
+#	les points d'entree suivants seront definis :
+#	tous retournent en general dans r0 un code erreur (cc)
+#	cc = 0 indique que tout s'est bien passe
+#
+
+	.text
+
+#	initialise le canal terminal (cc = 0)
+
+	.globl	ll_tty
+
+#	retourne le caractere lu suivant dans r10 (cc dans r0)
+
+	.globl	ll_ttyi
+
+#	imprime la chaine de taille r10 et d'adresse r0 (cc = r0)
+
+	.globl	ll_ttyo
+
+#	imprime la chaine d'adresse r0 et de taille r10
+#	sur le canal de numero r11 (cc = r0)
+
+	.globl	ll_sfo
+
+#	ouvre un fichier en entree de nom r0 et de taille r10
+#	sur le canal de numero r11 (cc = r0)
+
+	.globl	ll_opi
+
+#	ouvre un fichier en sortie de nom r0 et de taille r10
+#	sur le canal r11 (cc = r0)
+
+	.globl	ll_opo
+
+
+#	lit dans le tampon d'adresse r0 la ligne suivante du canal r11
+#	(r10 contient le nombre de caracteres transferes, cc = r0)
+
+	.globl	ll_ibc
+
+#	ferme le canal de numero r11  (cc = r0)
+
+	.globl	ll_clo
+
+#	detruit le fichier de nom r0 de taille r10 (cc = r0)
+
+	.globl	ll_del
+
+#	renomme le fichier de nom r0 -> dans le nom r10 (cc = r0)
+
+	.globl	ll_ren
+
+#	sauve une image memoire de nom r0 et de taille r10 (cc = r0)
+
+	.globl	ll_corsav
+
+#	restaure une image memoire de nom r0 et de taille r10 (cc = r0)
+
+	.globl	ll_corest
+
+#	retourne au systeme hote
+
+	.globl	ll_exit
+
+#	retourne le 'run-time' du systeme Le_Lisp
+
+	.globl	ll_runt
+
+#
+#	debut de la zone impure qui sera sauvee par save-core
+#
+
+	.data
+
+.bimpur:
+	.asciz	"**** debut de la zone sw ****"
+	.align 1
+
+	.globl	lel_a7
+lel_a7:	.long	0		# pointeur de pile a l'entree
+
+#
+#	la pile le_lisp 68k
+#
+
+.estack: .space	64*4		# tolerance pile
+.mstack: .space 4000*4		# fin a tester de la pile
+.bstack: .long	0		# fond de la pile.
+
+
+#**********************************************************************
+#								      *
+#	l e   l i s p   6 8 k   :   les interfaces unix VAX
+#							  	      *
+#**********************************************************************
+
+#================================================
+#	taille de la zone dynamique
+#================================================
+
+	.set	.smemi,0*1024		# donc pas de memoire image
+	.set	.scode,6*1024		# 6 k octet pour le binaire
+	.set	.sarray,1*1024		# 1 k pour les tableaux de pointeurs
+	.set	.sstrg,4*1024		# 4 k pour les chaines
+	.set	.ssymb,64*1024		# 56 k pour les atomes
+	.set	.scons,96*1024		# 64 ko = 8k cons
+
+
+	.text
+
+
+#	ll_tty/tyi/tyo  : gestion du terminal
+#	=====================================
+#
+
+#	ll_tty  :  initialise le canal tty, retourne un code d'erreur
+#	en fait toujours 0 (i.e. ok)
+ll_tty:
+	pushr	$0x7FFF
+	pushal	argp
+	pushl	$0		# STDIN
+	calls	$2,_gtty
+	bicw2	$10,argp+4	# NON echo
+	bisw2	$2,argp+4	# CBREAK
+	pushal	argp
+	pushl	$0
+	calls	$2,_stty
+	clrl	r0
+	popr	$0x7FFF
+	rsb
+
+#	ll_ttyi  : retourne dans r10 le caractere suivant
+#		   et dans r0 le code erreur.
+
+
+
+ll_ttyi:
+	pushr	$0x7FFE
+	pushl	$1
+	pushal	bufux
+	pushl	$0		# STDIN
+	.globl	_read
+	calls	$3,_read
+	popr	$0x7FFE
+	movzbl	bufux,r10
+	cmpl	$0x0a,r10
+	bnequ	ll_ttyi2
+	movl	$0x0d,r10
+ll_ttyi2:
+	clrl	r0
+	rsb
+
+#	ll_ttyo  :  sort la chaine pointee pas r0 de taille r10
+#		    retourne dans r0 le cc
+
+ll_ttyo:
+	pushr	$0x7FFE
+	tstl	r10	# il y a quelque chose ?
+	beql	ll_tyo9	# non retour rapide
+	pushl	r10	# empile la taille
+	pushl	r0	# empile l'adresse
+	pushl	$1	# STDOUT
+	.globl	_write
+	calls	$3,_write # on y va
+ll_tyo9:
+	clrl	r0	# cc
+	popr	$0x7FFE
+	rsb
+
+
+
+#
+#	ll_sfo : sort une chaine pointee par r0 et r10
+# 		 sur un canal de numero r11
+#
+
+ll_sfo:
+	pushr	$0x7FFE
+	pushl	r11		# le nb
+	pushl	r0		# l'adresse
+	pushl	fild2		# le canal
+	.globl	_write
+	calls	$3,_write
+	cmpl	r0,$-1		# ok ?
+	beql	ll_sf3		# nan
+	clrl	r0		# cc = ok
+	jbr	ll_sf9
+ll_sf3:	movl	$1,r0		# io error
+ll_sf9:	popr	$0x7FFE
+	rsb
+
+#
+#	ll_opi : ouvre un fichier disque de nom (chaine) r0 - r10
+#		r11 contient le numero du canal
+#		retourne dans r0 le cc !
+#
+
+ll_opi:
+	pushr	$0x7FFE
+	pushl	$0		# mode = read
+	pushl	r0		# adresse de la chaine
+	.globl	_open
+	calls	$2,_open
+	cmpl	$-1,r0		# alors raconte ?
+	beql	ll_opi9		# ca va pas!
+	movl	r0,filtab[r11]	# sauve le fildesc
+	clrl	r0		# cc = ok.
+ll_opi9:
+	popr	$0x7FFE
+	rsb
+
+#
+#	ll_opo : ouvre un fichier disque en sortie
+#	r0 adresse de la chaine file-name, r10 le nb de caracteres
+#	r11 le numero de canal. retourne r0 = cc
+#
+
+ll_opo:
+	pushr	$0x7FFE
+	pushl	$1		# mode = write pour le _open final
+	pushl	r0		# filename pour le _open final
+	pushl	$-1		# mode (a la umask)
+	pushl	r0		# filename
+	.globl	_creat
+	calls	$2,_creat
+	cmpl	r0,$-1		# ok ?
+	beql	ll_opo6		# non
+	.globl	_open
+	calls	$2,_open
+	cmpl	r0,$-1		# ok ?
+	beql	ll_opo6		# non.
+	movl	r0,fil2
+	clrl	r0		# cc = ok
+	jbr	ll_opo9	
+ll_opo6:
+	movl	$1,r0		# cc = erre
+ll_opo9:
+	popr	$0x7FFE
+	rsb
+
+#
+#	ll_ibc : lecture de la ligne suivante du fichier
+#		r10 contient le numero de canal,
+#		r0 contient l'adresse du buffer ou se trouvera la ligne.
+#	r0 = cc, r10 = le nb de caracteres!
+#
+
+ll_ibc:
+	pushr	$0x7FFE
+	movl	filtab[r11],fildesc # le fildesc courant
+	pushl	r0		# pour le calcul final
+ll_ibc1:
+	pushl	r0		# adresse actuelle du tampon
+	pushl	$1		# nb de caracteres a lire
+	pushl	r0		# adresse du tampon
+	pushl	fildesc		# fildesc d'entree
+	.globl	_read
+	calls	$3,_read
+	cmpl	r0,$1		# teste le code retour du _read
+	bneq	ll_ibc3		# erreur.
+	movl	(sp)+,r0	# recupere l'adresse actuelle.
+	cmpb	$0x0a,(r0)+	# le caractere lu est lf ?
+	bneq	ll_ibc1		# non je boucle.
+	decl	r0		# revient sur l'adresse du lf.
+ll_ibc2:
+	movb	$0x0d,(r0)+	# force RETURN
+	movb	$0x0a,(r0)+	# force LF
+	subl2	(sp)+,r0	# calcul de la taille.
+	popr	$0x7FFE
+	movl	r0,r10		# retour de la taille dans R10
+	clrl	r0
+	rsb
+ll_ibc3:
+	movl	(sp)+,r0	# nettoie la pile
+	movb	$0x1a,(r0)+	# indic fin de fichier.
+	jbr	ll_ibc2
+
+#
+#	ll_opn : ouvre un fichier ;
+#
+
+ll_opn:
+	pushr	$0x7FFE
+	movl	$0xfff,r0
+	popr	$0x7FFE
+	rsb
+
+#
+#	ll_clo : ferme un canal (numero dans r10)
+#
+
+ll_clo:
+	pushr	$0x7FFE
+	pushl	filtab[r11]
+	.globl	_close
+	calls	$1,_close
+	clrl	r0
+	popr	$0x7FFE
+	rsb
+
+#
+#	ll_del : detruit le fichier de nom r0
+#
+
+ll_del:
+	pushr	$0x7FFE
+	movl	$0xfff,r0
+	popr	$0x7FFE
+	rsb
+
+#
+#	ll_ren : renomme un fichier de nom r0 -> r10
+#
+
+ll_ren:
+	pushr	$0x7FFE
+	movl	$0xfff,r0
+	popr	$0x7FFE
+	rsb
+
+#
+#	ll_corsav  :  sauve une image memoire dans le fichier r0
+#
+
+ll_corsav:
+	pushr	$0x7FFE
+	movl	$0xfff,r0
+	popr	$0x7FFE
+	rsb
+
+#
+#	ll_corest  :  restaure une image memoire dans le fichier r0
+#
+
+ll_corest:
+	pushr	$0x7FFE
+	movl	$0xfff,r0
+	popr	$0x7FFE
+	rsb
+
+#
+#	ll_exit		retour au systeme hote
+#
+
+
+	.globl	exit
+ll_exit:
+	bisw2	$10,argp+4	# echo
+	bicw2	$2,argp+4	# -CBREAK
+	pushal	argp
+	pushl	$0
+	calls	$2,_stty
+	.globl	_exit
+	calls	$0,_exit
+#	on ne doit jamais arriver ici !!!!
+	nop
+
+#
+#	ll_runt  : retourne le 'run-time' du systeme Le_Lisp
+#	depuis son lancement.
+#
+
+	.globl	ll_runt
+ll_runt:
+	pushr	$0x7FFE
+	.globl	_times
+	pushal	timbuf
+	calls	$1,_times
+	movl	timbuf,r0
+	popr	$0x7FFE
+	rsb
+	
+#**************************************************
+#
+#	vrai depart sous unix
+#
+#**************************************************
+
+	.globl	smemi
+	.globl	scode
+	.globl	sarray
+	.globl	sstrg
+	.globl	ssymb
+	.globl	scons
+	.globl	bmemi
+	.globl	stotal
+	.globl	dtotal
+	.globl	bstack
+	.globl	mstack
+	.globl	estack
+
+	.globl	sysini
+sysini:
+
+#	initialisation de la pile
+
+	movl	$.bstack,bstack
+	movl	$.mstack,mstack
+	movl	$.estack,estack
+
+	movl	$.bstack,r14	# la pile le_lisp
+
+#	initialisation des tailles/adresses des zones
+
+	movl	$.smemi,smemi
+	movl	$.scode,scode
+	movl	$.sarray,sarray
+	movl	$.sstrg,sstrg
+	movl	$.ssymb,ssymb
+	movl	$.scons,scons
+
+	.set	smalloc,.smemi+.scode+.sarray+.sstrg+.ssymb+.scons
+	pushl	$smalloc
+	.globl	_malloc
+	calls	$1,_malloc
+	movl	r0,bmemi
+
+#	initialisation du canal terminal
+
+	jsb     ll_tty
+
+
+#	initialisation du fichier initial
+
+	.globl	filin
+	.globl	filiz
+
+ .globl sstart8
+sstart8: movl   $filinc,filiz	# taille
+	 movc3	$filinc+1,filini,filin	# il faut compter le 00!
+
+sstart9:
+
+	.globl	llinit
+	jmp	llinit		# retour au module commun llm3
+
+	nop			# ?!?!?!
+	.set	filinc,26	# taille de la chaine suivante ...
+filini:	.ascii	"/udd/lelisp/lib/lelisp.ini"
+	.byte	0
+
+
+
+
+	.data
+
+
+      .globl fil0
+
+filtab:
+fil0:	.long	0	# input
+fil1:	.long	0	# library
+fil2:	.long	0	# output
+fildesc:
+	.long	0	# le courant
+
+#	tampon
+
+bufux:	.long	0	# tampon de caractere
+
+argp:	.long	0
+	.long	0
+
+timbuf:	.long	0	# user time
+	.long	0	# systeme time
+	.long	0	# user time children
+	.long	0	# system time children
+	
+tampon:	.space	20*4
+
+
+

@@ -1,0 +1,79 @@
+		******************************
+		*  Le_Lisp 80  (de l'INRIA)  *
+		******************************
+
+
+Cette note contient les nouveautes, les modifications et les suppressions
+apportees au systeme Le_Lisp 80 version 12 du 1-Mai-83 tel qu'il est
+decrit dans le manuel de reference :
+
+		Le_Lisp 80, version 12,
+		  manuel de reference,
+		rapport technique No 99
+		     Juillet 1983
+
+		  Jerome Chailloux
+		     I.N.R.I.A.
+		Domaine de voluceau
+		B.P.105, 78153 Cedex
+
+
+
+Les modifications apportees a l'interprete :
+--------------------------------------------
+
+1 - les casses : la casse par defaut est minuscule.
+
+2 - TYO : le facteur de repetition est code sur 6 bits (max 64)
+	et le code ASCII est represente sur 8 bits.
+
+3 - SCALE opere sur 32 bits en interne
+
+
+Les ajouts :
+------------
+
+1 - MEMORYX : sur les versions 8086
+
+
+Voici la liste des utilitaires de la bibliotheque Le_Lisp 80 :
+--------------------------------------------------------------
+
+startup.ll	le fichier initial Le_Lisp 80, doit toujours etre charge
+		en utilisation courante du systeme
+
+virtty.ll	definition des terminaux virtuels du systeme. Doit etre 
+		charge avant toute utilisation video.
+
+virgraph.ll	definition des terminaux graphiques du systeme. Doit etre
+		charge avant toute utilisation graphique.
+
+hanoi.ll	Deux petits programmes de demonstration de l'utilisation
+vdt.ll		des terminaux virtuels.
+tgraph.ll	Un test du systeme graphique.
+
+pepe.ll		l'editeur pleine page video
+peptop.ll
+pepln1.ll
+pepln2.ll
+pepln3.ll
+pepmsc.ll
+pepcmd.ll
+pepesc.ll
+pepini.ll
+pepato.ll
+pephlp.ll	la documentation en ligne de cet editeur.
+
+pretty.ll	le paragrapheur de fonctions
+trace.ll	le pisteur de fonctions
+debug.ll	la mise au point interactive
+
+sortl.ll	utilitaires de tri et de documentation
+impr.ll		
+virv24.ll
+
+loader.ll	le chargeur memoire.
+
+oblist.ll	la localisation et le type de toutes les fonctions
+		du systeme standard.
+		

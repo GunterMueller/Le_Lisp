@@ -1,0 +1,731 @@
+*************************************************************
+*                                                           *
+*                   L E    L I S P    6 8 K                 *
+*                     systeme  VERSADOS                     *
+*                                                           *
+*************************************************************
+*                                                           *
+*                     Jerome   CHAILLOUX                    *
+*                                                           *
+*                     I . N . R . I . A .                   *
+*              Domaine de Voluceau, Rocquencourt            *
+*              B.P. 105   78153 Le Chesnay Cedex            *
+*              Tel : (1) 954 90 20   poste 456              *
+*                                                           *
+*************************************************************
+ 
+ 
+          TTL       LE Lisp 68K, by Jerome Chailloux.
+ 
+LLVSDOS   IDNT      1,1       ASM : racine assembleur.
+ 
+          NOLIST
+ 
+*========================================
+*         Les sections utilisees
+*========================================
+ 
+*         SECTION   8         RO        reservee pour Pascal
+*         SECTION   9         RO        modules assembleurs
+*         SECTION   10        RO        modules Le_Lisp
+*         SECTION   11        RO        le noyau de l'inteprete
+*
+*         SECTION   14        RW        donnees NON sauvees par SAVE-CORE
+*         SECTION   15        RW        donnees sauvees par SAVE-CORE
+ 
+ 
+*************************************************************
+*                                                           *
+*         Appel principal de LL68K (direct de Pascal)       *
+*                                                           *
+*************************************************************
+ 
+          SECTION   9                   pour PASCAL
+ 
+          XDEF      LLVSDOS
+ 
+LLVSDOS   JMP       LL68KGO
+          NOP
+ 
+          SECTION   10                  monde de Lisp
+ 
+          XDEF      LL68KGO
+          XREF      REENTER,THEEND      in LLINIT (LLM3)
+ 
+LL68KGO   EQU       *
+          BRA       LL68KC              Cold start
+          BRA       REENTER             Warm start
+          BRA       THEEND              Stupid start
+ 
+LL68KC    EQU       *
+          MOVE.L    A7,LEL_A7           sauve le pointeur de pile
+          BRA       SYSINI
+ 
+*
+*         chargement du module dependant du systeme :
+*                    - de point d'entree : SYSINI
+*                    - il doit revenir au moyen d'un BRA LLINIT
+*
+*         au retour, les mots suivants sont charges :
+*                   SMEMI SCODE SARRAY SSTRG SSYMB SCONS (toutes les tailles)
+*                   BMEMI (l'adresse de la 1ere zone)
+*                   (tous les autres mots seront initialises par LLINIT)
+*
+*
+*
+*         Les points d'entree suivants seront definis :
+*         tous retournent en general dans A0 un code erreur (cc)
+*         cc = 0 indique que tout s'est bien passe
+*
+ 
+          SECTION   10
+ 
+*         initialise le canal terminal (cc = 0)
+ 
+          XDEF      LL_TTY
+ 
+*         retourne le caractere lu suivant dans D0 (cc dans A0)
+ 
+          XDEF      LL_TTYI
+ 
+*         imprime la chaine de taille D0 et d'adresse A0 (cc = A0)
+ 
+          XDEF      LL_TTYO
+ 
+*         imprime la chaine d'adresse A0 et de taille D0
+*         sur le canal de numero D1 (cc = A0)
+ 
+          XDEF      LL_SFO
+ 
+*         ouvre un fichier en entree de nom A0 et de taille D0
+*         sur le canal de numero D1 (cc = A0)
+ 
+          XDEF      LL_OPI
+ 
+*         ouvre un fichier en sortie de nom A0 et de taille D0
+*         sur le canal D1 (cc = A0)
+ 
+          XDEF      LL_OPO
+ 
+ 
+*         lit dans le tampon d'adresse A0 la ligne suivante du canal D1
+*         (D0 contient le nombre de caracteres transferes, cc = A0)
+ 
+          XDEF      LL_IBC
+ 
+*         ferme le canal de numero D1  (cc = A0)
+ 
+          XDEF      LL_CLO
+ 
+*         detruit le fichier de nom A0 de taille D0 (cc = A0)
+ 
+          XDEF      LL_DEL
+ 
+*         renomme le fichier de nom A0 -> dans le nom D0 (cc = A0)
+ 
+          XDEF      LL_REN
+ 
+*         sauve une image memoire de nom A0 et de taille D0 (cc = A0)
+ 
+          XDEF      LL_CORSAV
+ 
+*         restaure une image memoire de nom A0 et de taille D0 (cc = A0)
+ 
+          XDEF      LL_COREST
+ 
+*         retourne au systeme hote
+ 
+          XDEF      LL_EXIT
+ 
+ 
+          SECTION 15
+ 
+ 
+*
+*         Ce ne sera pas sauve par SAVE-CORE
+*
+ 
+SECONS    DC.L      0         save ECONS
+SDTOTAL   DC.L      0         save DTOTAL
+ 
+ 
+*
+*         Debut de la zone impure qui sera sauvee par SAVE-CORE
+*
+ 
+ 
+.BIMPUR   EQU       *
+          DC.W      28,'**** Debut de la zone SW ****'
+ 
+          XDEF      LEL_A7
+LEL_A7    DC.L      0                   pointeur de pile a l'entree
+ 
+*
+*         La pile Le_Lisp 68K
+*
+ 
+.ESTACK   DS.L      64                  tolerance pile
+.MSTACK   DS.L      4000                fin a tester de la pile
+.BSTACK   DC.L      0                   fond de la pile.
+ 
+ 
+***********************************************************************
+*                                                                     *
+*         L E   L I S P   6 8 K   :   les interfaces VERSAdos         *
+*                                                                     *
+***********************************************************************
+ 
+ 
+*================================================
+*         Taille de la zone dynamique
+*================================================
+ 
+ 
+     IFNE SYS256K             petit systeme
+.SCODE    EQU       4*1024              1 k octet pour le binaire
+.SARRAY   EQU       1*1024              1 k octet pour les tableaux
+.SSTRG    EQU       1*1024              1 k pour les chaines
+.SSYMB    EQU       36*1024             36 k pour les symboles
+     ENDC
+ 
+ 
+     IFEQ SYS256K             gros systeme
+.SCODE    EQU       128*1024            128 k octet pour le binaire !
+.SARRAY   EQU       4*1024               4  k pour les tableaux
+.SSTRG    EQU       8*1024               8  k pour les chaines
+.SSYMB    EQU       128*1024           128  k pour les symboles.
+     ENDC
+ 
+          SECTION   10
+ 
+TSLIMI    EQU       16                  nb minimum de k
+ 
+     IFNE SYS256K             petit systeme
+TSLIST    DC.L      3*8*1024            taille 0
+          DC.L      4*8*1024            taille 1
+          DC.L      5*8*1024            taille 2
+          DC.L      6*8*1024            taille 3
+          DC.L      7*8*1024            taille 4
+          DC.L      8*8*1024            taille 5
+          DC.L      9*8*1024            taille 6
+          DC.L      10*8*1024           taille 7
+          DC.L      11*8*1024           taille 8
+          DC.L      12*8*1024           taille 9
+      ENDC
+ 
+      IFEQ SYS256K            gros systeme
+TSLIST    DC.L      8*8*1024             taille 0
+          DC.L      12*8*1024            taille 1
+          DC.L      16*8*1024            taille 2
+          DC.L      24*8*1024            taille 3
+          DC.L      32*8*1024            taille 4
+          DC.L      40*8*1024            taille 5
+          DC.L      48*8*1024            taille 6
+          DC.L      56*8*1024            taille 7
+          DC.L      64*8*1024            taille 8
+          DC.L      72*8*1024            taille 9
+          DC.L      80*8*1024            taille 10
+          DC.L      88*8*1024            taille 11
+          DC.L      96*8*1024            taille 12
+          DC.L      104*8*1024           taille 13
+          DC.L      112*8*1024           taille 14
+          DC.L      120*8*1024           taille 15
+      ENDC
+ 
+          SECTION   15
+ 
+.BCODE    EQU       $400000             debut de la zone binaire (dump)
+.ECODE    EQU       .BCODE+.SCODE-1     fin de la zone binaire
+.BARRAY   EQU       .BCODE+.SCODE       debut de la zone tableau
+.EARRAY   EQU       .BARRAY+.SARRAY-1   fin de la zone tableau
+.BSTRG    EQU       .BARRAY+.SARRAY     debut de la zone chaine
+.ESTRG    EQU       .BSTRG+.SSTRG-1     fin de la zone chaine
+.BSYMB    EQU       .BSTRG+.SSTRG       debut de la zone atome
+.ESYMB    EQU       .BSYMB+.SSYMB-1     fin de la zone atome
+.BCONS    EQU       .BSYMB+.SSYMB       debut de la zone liste
+ 
+          XDEF      .BIMPUR,SAVEA7,SAVFILN
+ 
+          XDEF      LL_A5                        pour Gerard! (RMA)
+ 
+*         Les XREFS Pascal
+ 
+          XREF      OPENTTY,PRMPTTTY,PUTTTY
+          XREF      PUTSTR,FLUSH
+          XREF      OPENIN,OPENOU,LLREAD,LLREADLN
+          XREF      CLOSEF,RENAMEF,DELETEF
+          XREF      SAVESEG,LOADSEG
+ 
+          XREF      .EIMPUR             dans BLLSHT (fin de la Section 15)
+ 
+*         Restauration du contexe PASCAL
+ 
+LL_RES    MACRO
+          MOVEM.L   A1-A6/D2-D7,-(A7)
+          MOVE.L    A7,LEL_A7
+          MOVE.L    LL_A3,A3
+          MOVE.L    LL_A5,A5
+          MOVE.L    LL_A7,A7
+          ENDM
+ 
+ 
+*         Sauvegarde du contexe PASCAL
+*         A n'utiliser qu'apres un LL_RES!
+ 
+LL_SAV    MACRO
+          MOVE.L    A3,LL_A3
+          MOVE.L    A5,LL_A5
+          MOVE.L    A7,LL_A7
+          MOVE.L    LEL_A7,A7
+          MOVEM.L   (A7)+,A1-A6/D2-D7
+          ENDM
+ 
+          SECTION   10
+ 
+*
+*         Transfert dans le tampon BPHYS la chaine d'adresse A0
+*         et de taille D0, cette chaine possede le format EXORmacs
+*         i.e. taille sur 16 bits suivie des caracteres
+*
+ 
+LL_TSTRG  EQU       *
+          LEA       BPHYS,A1            buffer pour VERSAdos
+          MOVE.W    D0,(A1)+
+          BRA.S     LL_TSTR3
+LL_TSTR2  MOVE.B    (A0)+,(A1)+
+LL_TSTR3  DBRA      D0,LL_TSTR2         range toute la chaine.
+          RTS
+ 
+*
+*         LL_TTY/TYI/TYO  : gestion du terminal
+*         =====================================
+*
+ 
+*         LL_TTY  :  initialise le canal TTY
+*         retourne un code d'erreur dans A0
+ 
+LL_TTY    EQU       *
+          LL_RES                        mode pascal
+          CLR.L     -(A7)               place pour  le resultat
+          JSR       OPENTTY             on ouvre
+          MOVE.L    (A7)+,A0            le code retour
+          LL_SAV                        retourne en mode lisp
+          RTS
+ 
+*         LL_TTYI  :   retourne dans D0 le caractere suivant
+*                      et dans A0 le code erreur :0 = OK
+ 
+ 
+LL_TTYI   EQU       *
+          LL_RES                        passe en mode pascal
+          CLR.W     -(A7)               place pour le caractere retourne
+          PEA       AVOID
+          JSR       PRMPTTTY            input with output
+          CLR.L     D0                  pour preparer le resultat
+          MOVE.W    (A7),D0             sur 16 bits :  | caractere | cc |
+          LSR       #8,D0               cadre a droite
+          AND.L     #$0000007F,D0       enleve tous les bits non significatifs
+          CLR.L     D1                  prepare le code retour
+          MOVE.W    (A7)+,D1            depile le code d'erreur
+          AND.W     #$00FF,D1           cc sur 8 bits.
+          MOVE.L    D1,A0               le vrai cc lisp
+          LL_SAV                        repasse en mode lisp
+          RTS
+AVOID     DC.L      0
+ 
+*         LL_TTYO  :  sort la chaine de taille D0, pointee par A0
+*                     retourne dans A0 le cc (0 = OK)
+ 
+LL_TTYO   EQU       *
+          LL_RES                        passe en mode pascal
+          BSR       LL_TSTRG            transfert de la chaine
+LL_TYO1   CLR.L     -(A7)               place pour le resultat
+          PEA       BPHYS
+          JSR       PUTTTY              on sort la chaine
+          MOVE.L    (A7)+,A0            le cc
+          LL_SAV                        retourne en mode lisp
+          RTS
+ 
+*
+*         LL_SFO :  sort une chaine pointee par A0 de taille D0
+*                   sur un canal de numero D1
+*
+ 
+LL_SFO    EQU       *
+          LL_RES
+          BSR       LL_TSTRG            tansfert la chaine
+          CMP.L     D1,D5               ?!?!  BTNIL D0,
+          BEQ       LL_TYO1             ?!?!     LL_TYO1   pour la console
+          MOVE.L    LL_FIL3,-(A7)       pointeur FIL3
+          PEA       BPHYS
+          JSR       PUTSTR
+          LL_SAV
+          RTS
+ 
+*
+*         LL_OPI : ouvre un fichier disque de nom (chaine) A0,D0
+*                  D1 contient le numero du canal
+*
+ 
+LL_OPI    EQU       *
+          TST.L     D1                  type du fichier 0=read 1=lib
+          BNE.S     LL_OPI1
+          MOVE.L    LL_FIL1,D1          INPUT
+          BRA.S     LL_OPI2
+LL_OPI1   MOVE.L    LL_FIL2,D1          LIB
+LL_OPI2   LL_RES
+          BSR       LL_TSTRG            transfert le nom
+          CLR.L     -(A7)               place pour le resultat (cc)
+          MOVE.L    D1,-(A7)            pointeur fichier INPUT
+          PEA       BPHYS               le nom du fichier
+          JSR       OPENIN              on ouvre
+          MOVE.L    (A7)+,A0            depile le cc
+          LL_SAV
+          RTS
+ 
+*
+*         LL_OPO : ouvre un fichier disque en sortie
+*         A0 adresse de la chaine file-name, D0 sa taille,
+*         D1 numero du canal.
+*
+ 
+LL_OPO    EQU       *
+          LL_RES
+*                                       actuellement on se fout du numero
+          BSR       LL_TSTRG            tansfert le nom du fichier
+          CLR.L     -(A7)               place pour le resultat (cc)
+          MOVE.L    LL_FIL3,-(A7)       pointeur fichier sortie
+          PEA       BPHYS               nom du fichier
+          JSR       OPENOU              on ouvre
+          MOVE.L    (A7)+,A0            depile le cc
+          LL_SAV
+          RTS
+ 
+*
+*         LL_IBC :  lecture de la ligne suivante du fichier
+*                   D1 contient le numero de canal,
+*                   A0 contient l'adresse du buffer ou se trouvera la ligne.
+*                   retourne D0 le nb de caracteres lus et A0=cc
+*
+ 
+LL_IBC    EQU       *
+          TST.L     D1                  type du fichier 0=read 1=lib
+          BNE.S     LL_IBC1
+          MOVE.L    LL_FIL1,D1         INPUT
+          BRA.S     LL_IBC2
+LL_IBC1   MOVE.L    LL_FIL2,D1         LIB
+LL_IBC2   LL_RES
+          PUSH      A0                  ancienne adresse
+          CLR.L     -(A7)               place dans la pile (FUNCTION)
+          MOVE.L    D1,-(A7)            pointeur INPUT
+          PEA       BPHYS               adresse du tampon
+          JSR       LLREADLN
+          POP       D0                  le cc
+          POP       A0                  l'ancienne adresse
+          PUSH      D0                  je dois bosser
+          LEA       BPHYS,A1            adresse du tampon physique
+          CLR.L     D1
+          MOVE.W    (A1)+,D1
+          MOVE.L    D1,D0               le nb de car transmis (a garder)
+          BRA.S     LL_IBC6
+LL_IBC5   MOVE.B    (A1)+,(A0)+
+LL_IBC6   DBRA      D1,LL_IBC5
+          MOVE.L    (A7)+,A0            recup le cc
+          LL_SAV
+          RTS
+ 
+ 
+*
+*         LL_CLO : ferme un canal (numero dans D1)
+*
+ 
+LL_CLO    EQU       *
+          CMP.L     #0,D1               test numero de canal
+          BNE.S     LL_CLO1
+          MOVE.L    LL_FIL1,D1         INPUT
+          BRA.S     LL_CLO5
+LL_CLO1   CMP.L     #1,D1
+          BNE.S     LL_CLO2
+          MOVE.L    LL_FIL2,D1         LOAD
+          BRA.S     LL_CLO5
+LL_CLO2   CMP.L     #3,D1
+          BNE.S     LL_CLO9            rien a faire
+          MOVE.L    LL_FIL3,D1            OUTPUT
+LL_CLO5   LL_RES
+          CLR.L     -(A7)               place pour le resultat (CC)
+          MOVE.L    D1,-(A7)            empile le pointeur du fichier
+          JSR       CLOSEF              on ferme
+          MOVE.L    (A7)+,A0            recup le CC
+          LL_SAV
+          RTS
+LL_CLO9   MOVE.L    #$0000FFFE,A0       CC = -2 mauvais numero de canal
+          RTS
+ 
+*
+*         LL_DEL : detruit le fichier de nom A0,D0
+*
+ 
+LL_DEL    EQU       *
+          LL_RES                        sauve le contexte lisp
+          BSR       LL_TSTRG            transfert le nom
+          CLR.L     -(A7)               place pour le resultat
+          PEA       BPHYS               le nom
+          JSR       DELETEF             action!
+          MOVE.L    (A7)+,A0            recup le cc
+          LL_SAV                        restaure le contexte lisp
+          RTS
+ 
+*
+*         LL_REN : renomme un fichier de nom A0 -> D0
+*         ?!?!?! a faire
+*
+ 
+LL_REN    EQU       *
+          LL_RES                       sauve le contexte lisp
+          CLR.L     -(A7)               place pour le resultat
+          MOVE.L    A0,-(A7)            ancien nom (chaine)
+          MOVE.L    D0,-(A7)            nouveau nom (chaine)
+          JSR       RENAMEF             action !
+          MOVE.L    (A7)+,A0            recup le cc
+          LL_SAV                       restaure le contexte lisp
+          RTS
+ 
+*
+*         LL_CORSAV  :  sauve une image memoire dans le fichier A0
+*
+ 
+LL_CORSAV EQU      *
+          MOVE.L    A0,SAVFILN          pour le 2eme LOADSEG
+          MOVEM.L   A1-A6/D1-D7,-(A7)   pour le restaure (meme registres!)
+          MOVE.L    A7,SAVEA7           la pile pour le sauvetage
+          LL_RES                        restaure Pascal
+          CLR.L     -(A7)               place pour le resultat
+          MOVE.L    A0,-(A7)            nom du fichier
+          MOVE.W    #'SV',-(A7)         extension std
+          MOVE.L    #.BCODE,-(A7)       adresse de debut
+          MOVE.L    DTOTAL,-(A7)        la taille totale a sauver
+          JSR       SAVESEG
+          MOVE.L    SAVFILN,-(A7)       re nom du fichier
+          MOVE.W    #'SW',-(A7)         re extension standard
+          MOVE.L    #.BIMPUR,-(A7)      adresse de debut
+          MOVE.L    #.EIMPUR,D1          calcul de la taille
+          SUB.L     #.BIMPUR,D1         voila j'ai la taille.
+          ADD.L     #256,D1             passage en multiple de 256
+          AND.L     #$FFFF00,D1         puissance de 256!
+          MOVE.L    D1,-(A7)            la taille
+          JSR       SAVESEG
+          MOVE.L    (A7)+,A0            le CC
+          LL_SAV                        restaure le contexte lisp
+          MOVE.L    SAVEA7,A7           pile du sauvetage
+          MOVEM.L   (A7)+,A1-A6/D1-D7
+          RTS
+ 
+*
+*         LL_COREST  :  restaure une image memoire dans le fichier A0
+*
+ 
+LL_COREST EQU      *
+         LEA        SAVFILN,A5
+         MOVE.L    (A0)+,(A5)+
+         MOVE.L    (A0)+,(A5)+
+         MOVE.L    (A0)+,(A5)+
+         MOVE.L    (A0)+,(A5)+
+         MOVE.L    (A0)+,(A5)+
+         MOVE.L    (A0)+,(A5)+
+         MOVE.L    (A0)+,(A5)+
+         MOVE.L    (A0)+,(A5)+
+         LL_RES
+          MOVE.L    ECONS,SECONS
+          MOVE.L    DTOTAL,SDTOTAL
+         CLR.L     -(A7)               place pour le resultat
+*        MSG       8,<' RESTSV '>
+         PEA       SAVFILN
+         MOVE.W    #'SV',-(A7)         extension std
+         MOVE.L    #.BCODE,-(A7)       adresse de debut
+         JSR       LOADSEG
+*        MSG       8,<' RESTSW '>
+         PEA       SAVFILN
+         MOVE.W    #'SW',-(A7)         re extension standard
+         MOVE.L    #.BIMPUR,-(A7)      adresse de debut
+         JSR       LOADSEG
+         MOVE.L    (A7)+,A0            le CC
+*        MSG       8,<' RESTOK '>
+          MOVE.L    SDTOTAL,DTOTAL
+          MOVE.L    SECONS,ECONS
+         LL_SAV
+         MOVE.L    SAVEA7,A7           l'exacte pile
+         MOVEM.L   (A7)+,A1-A6/D1-D7   recup tous les autres registres!
+         RTS
+ 
+*
+*         LL_EXIT            retour au systeme hote
+*
+ 
+LL_EXIT  EQU       *
+          MOVEQ     #15,D0              code du TERMINATE
+          TRAP      #1                  tout est dit.
+ 
+ 
+***************************************************
+*
+*         VRAI DEPART sous VERSAdos
+*
+***************************************************
+ 
+          XREF      SMEMI,SCODE,SARRAY,SSTRG,SSYMB,SCONS,ECONS
+          XREF      BMEMI,STOTAL,DTOTAL
+          XREF      BSTACK,MSTACK,ESTACK
+ 
+SYSINI    EQU       *
+ 
+*         Sauvegarde des arguments et du contexte de Pascal
+ 
+          MOVE.L    (A7)+,LL_RET       adresse de retour de Pascal
+          MOVE.L    (A7)+,LL_FIL3      pointeur file 3
+          MOVE.L    (A7)+,LL_FIL2      pointeur file 2
+          MOVE.L    (A7)+,LL_FIL1      pointeur file 1
+          MOVE.L    (A7)+,LL_IFI       fichier initial
+          MOVE.L    (A7)+,LL_SIZ       type de taille
+          MOVE.L    (A7)+,LL_MEMI      indicateur MEMI
+ 
+          MOVE.L    A3,LL_A3           seuls ces 3 regs sont necessaires
+          MOVE.L    A5,LL_A5
+          MOVE.L    A7,LL_A7
+ 
+*         Initialisation de la pile
+ 
+          MOVE.L    #.BSTACK,BSTACK
+          MOVE.L    #.MSTACK,MSTACK
+          MOVE.L    #.ESTACK,ESTACK
+ 
+          MOVE.L    #.BSTACK,A7         la pile Le_Lisp
+ 
+*         Initialisation du canal terminal
+ 
+          BSR      LL_TTY
+     IFNE DEBUG
+          MSG      6,<' INIT '>
+     ENDC
+ 
+*         Initialisation des tailles/adresses des zones
+ 
+          TST.L     LL_MEMI            il faut la memoire image ?
+          BEQ.S     INMEM2              non
+          MOVE.L    #64*1024,SMEMI      64k
+          BRA.S     INMEM3
+INMEM2    CLR.L     SMEMI               0k
+INMEM3    EQU       *
+          MOVE.L    #.BCODE,D0
+          SUB.L     SMEMI,D0
+          MOVE.L    D0,BMEMI
+ 
+          MOVE.L    #.SCODE,SCODE
+          MOVE.L    #.SARRAY,SARRAY
+          MOVE.L    #.SSTRG,SSTRG
+          MOVE.L    #.SSYMB,SSYMB
+*         calcul de la taille de la zone liste SCONS
+          MOVE.L    LL_SIZ,D0           l'argument qui est fourni de pascal
+          AND.L     #$F,D0              pour protection!
+          LSL.L     #2,D0               pour des adresses de doubles mots
+          LEA       TSLIST,A0           adresse de la table
+          MOVE.L    (A0,D0.L),D0        D0 = taille de la zone liste
+          MOVE.L    D0,SCONS
+          ADD.L     #.SCODE+.SARRAY+.SSTRG+.SSYMB,D0  calcul de la taille
+          MOVE.L    D0,DTOTAL           taille totale a sauver (CORE)
+          ADD.L     SMEMI,D0            calcul de la taille totale
+          MOVE.L    D0,STOTAL           taille totale du seg LIST
+ 
+*         Allocation de l'espace dynamique
+ 
+    IFNE  DEBUG
+          MSG       10,<' INI_SEG1 '>
+    ENDC
+          LEA       BGSEG,A0            adresse du bloc de controle
+          MOVE.L    BMEMI,BGSEGADR      adresse de debut
+          MOVE.L    STOTAL,BGSEGSIZ     taille (dynamique) du segment
+          MOVEQ     #1,D0               code du GETSEG
+          TRAP      #1                  roulez jeunesse.
+          TST.L     D0                  compte rendu ?
+          BEQ.S     START1              tout c'est bien passe.
+          LEA       GSMSG,A0            adresse du message d'erreur
+          BSR       LL_TTYO             on l'imprime
+          BRA       THEEND
+START1
+    IFNE  DEBUG
+          MSG       10,<' INI_SEG2 '>
+    ENDC
+          LEA       CLSEG,A0            adresse du bloc de controle
+          MOVEQ     #1,D0               code du GETSEG
+          TRAP      #1                  roulez jeunesse.
+          TST.L     D0                  compte rendu ?
+          BEQ.S     SSTART8             tout c'est bien passe.
+          LEA       CLMSG,A0            adresse du message d'erreur
+          BSR       LL_TTYO             on l'imprime
+          BRA       THEEND
+ 
+          XREF      FILIN,FILIZ
+ 
+*         Initialisation du fichier initial
+ 
+SSTART8   MOVE.L    LL_IFI,A0           adresse du fichier initial
+          LEA       FILIN,A1
+          CLR.L     D0
+          MOVE.W    (A0)+,D0
+          MOVE.L    D0,FILIZ
+          BRA.S     SSTART82
+SSTART81  MOVE.B    (A0)+,(A1)+
+SSTART82  DBRA      D0,SSTART81
+          CLR.B     (A1)+
+ 
+ 
+          XREF      LLINIT
+ 
+SSTART9   BRA       LLINIT               retour au module commun LLM3
+ 
+*
+*         Data
+*
+          SECTION   15
+ 
+LL_RET   DC.L      0
+LL_IFI   DC.L      0                             ?!?!?!?
+LL_SIZ   DC.L      0                             ?!?!?!?
+LL_FIL1  DC.L      0         INPUT file
+LL_FIL2  DC.L      0         LIBRARY file
+LL_FIL3  DC.L      0         OUTPUT file
+LL_MEMI  DC.L      0         indicateur MEMI
+ 
+LL_A3    DC.L      0
+LL_A5    DC.L      0
+LL_A7    DC.L      0
+ 
+BGSEG     DC.L      0,0                 Pour le GETSEG, taskname, session
+          DC.W      $0000               Directives options
+          DC.W      $0000               Segment attributes
+          DC.L      'LIST'              Segment name
+BGSEGADR  DC.L      0                   adresse
+BGSEGSIZ  DC.L      0                   Segment length (calculee)
+ 
+GSMSG     DC.W      16
+          DC.W      'Erreur GETSEG : '
+ 
+CLSEG     DC.L      0,0                 Pour le GETSEG, taskname, session
+          DC.W      $0100               Directives options
+          DC.W      $0800               Segment attributes
+          DC.L      'COLX'              Segment name
+          DC.L      $EFE000             logical adress =physical adresse
+          DC.L      12                  Segment length
+ 
+CLMSG     DC.W      22,'Erreur GETSEG COLORIX '
+ 
+*
+*         Debut de la zone sauvable avec SAVE-CORE
+*
+ 
+          SECTION   15
+ 
+SAVEA7    DC.L      0                   le pp d'avant le sauvetage!
+SAVFILN   DCB.L     8,'****'            nom du fichier de sauvegarde!
+ 
+ 
+ 

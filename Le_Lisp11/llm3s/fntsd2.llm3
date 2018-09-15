@@ -1,0 +1,514 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :  les fonctions standard (2eme partie)
+*
+****************************************************************
+*
+*                Jerome CHAILLOUX  (Chailloux.Vlsi)
+*                           I.N.R.I.A.
+*                Domaine de Voluceau,  Rocquencourt
+*                B.P. 105,   78153 Le Chesnay Cedex
+*                tel : (1) 954 90 20      poste 456
+*
+*****************************************************************
+ 
+ 
+ 
+          PURE
+ 
+*
+*         Modification de listes (cons)
+*         =============================
+*
+*         RPLACA RPLACD RPLAC PLACDL DISPLACE
+*         ne sont definies que sur les listes non vides!
+*
+ 
+*----------------------------------------
+          FENTRY    RPLACA,SUBR2
+*----------------------------------------
+          BFCONS.S  A1,RPLACA1          ce doit etre une liste
+          MOV       A2,CAR(A1)          force le CAR
+          RETURN
+RPLACA1   MOV       .RPLACA,A2          nom de la fonction qui
+          BRA       ERRNLA              provoque l'erreur
+ 
+*----------------------------------------
+          FENTRY    RPLACD,SUBR2
+*----------------------------------------
+          BFCONS.S  A1,RPLACD1          ce doit etre une liste
+          MOV       A2,CDR(A1)          force le CDR
+          RETURN
+RPLACD1   MOV       .RPLACD,A2          nom de la fonction qui
+          BRA       ERRNLA              provoque l'erreur
+ 
+*         (de rplac (l a d) (rplaca l a) (rplacd l d) l)
+*----------------------------------------
+          FENTRY    RPLAC,SUBR3
+*----------------------------------------
+          BFCONS.S  A1,RPLAC1           ce doit etre une liste
+          MOV       A2,CAR(A1)          force le CAR
+          MOV       A3,CDR(A1)          force le CDR
+          RETURN
+RPLAC1    MOV       .RPLAC,A2           nom de la fonction qui
+          BRA       ERRNLA              provoque l'erreur.
+ 
+*         (de displace (l1 l2)
+*             (rplaca l1 (car l2)) (rplacd l1 (cdr l2)) l1)
+*----------------------------------------
+          FENTRY    DISPLACE,SUBR2
+*----------------------------------------
+          BFCONS.S  A1,DISPL2           ce doit etre une liste
+          BFCONS.S  A2,DISPL1           le 2eme arg aussi!
+          MOV       CAR(A2),CAR(A1)     force le CAR
+          MOV       CDR(A2),CDR(A1)     force le CDR
+          RETURN
+DISPL1    MOV       A2,A1               le mauvais argument
+DISPL2    MOV       .DISPLACE,A2        nom de la fonction qui
+          BRA       ERRNLA              provoque l'erreur
+ 
+*         (de placdl (l e) (cdr (rplacd l (ncons e))))
+*----------------------------------------
+          FENTRY    PLACDL,SUBR2
+*----------------------------------------
+          BFCONS.S  A1,PLACD1           ce doit etre une liste
+          NCONS     A2                  fabrique (ncons e)
+          MOV       A2,CDR(A1)          force le CDR
+          MOV       A2,A1               qui est retourne.
+          RETURN
+PLACD1    MOV       .PLACDL,A2          nom de la fonction qui
+          BRA       ERRNLA              provoque l'erreur.
+ 
+*
+*         SETQ : SUBRF
+*         n'est definie que sur les variables
+*
+*----------------------------------------
+          FENTRY    SETQ,SUBRF
+*----------------------------------------
+          BRA.S     SETQ2               au travail
+SETQ1     MOV       A2,A1
+SETQ2     PUSH      CAR(A1)             sauve le nom de la variable
+          MOV       CDR(A1),A1          A1 <- (val var val ...
+          PUSH      CDR(A1)             sauve le reste
+          CALL      EVALCAR             evalue la valeur
+          POP       A2                  recupere le reste de la liste
+          POP       A3                  recupere le nom de la variable
+          BFVAR.S   A3,SETQERR          il faut une variable
+          MOV       A1,CVAL(A3)         force la nouvelle CVAL
+          BTCONS    A2,SETQ1            il reste des couples
+          RETURN                        retourne la derniere valeur
+SETQERR   MOV       A3,A1               l'argment defectueux
+          MOV       .SETQ,A2            le nom de la fonction
+          BRA       ERRNVA              doit etre une variable
+ 
+*
+*         SET : SUBR2
+*         n'est definie que sur les variables
+*
+*----------------------------------------
+          FENTRY    FSET,SUBR2
+*----------------------------------------
+          BFVAR.S   A1,SETERR1          il faut une variable
+          MOV       A2,CVAL(A1)         force la nouvelle valeur
+          MOV       A2,A1               qui est retournee en valeur
+          RETURN
+SETERR1   MOV       .FSET,A2            le nom de la fonction
+          BRA       ERRNVA
+ 
+*
+*         SETQQ : SUBRF
+*         n'est definie que sur les variables
+*
+*----------------------------------------
+          FENTRY    SETQQ,SUBRF
+*----------------------------------------
+          MOV       CAR(A1),A2          A2 <- la variable
+          BFVAR.S   A2,SETQQERR         il faut une variable
+          MOV       CDR(A1),A1
+          MOV       CAR(A1),A1          A1 <- la valeur
+          MOV       A1,CVAL(A2)         force la valeur
+          RETURN                        qui est ramenee
+SETQQERR  MOV       A2,A1               la mauvaise variable
+          MOV       .SETQQ,A2           le nom de la fonction
+          BRA       ERRNVA              il fallait une variable
+ 
+*
+*         PSETQ : SUBRF
+*         SETQ parallele sur n variables
+*
+*----------------------------------------
+          FENTRY    PSETQ,SUBRF
+*----------------------------------------
+          PUSH      #MK_SUBRN           marque la pile (fin des couples)
+          BRA.S     PSETQ2              on roule.
+PSETQ1    PUSH      CAR(A1)             empile le nom de la variable
+          MOV       CDR(A1),A1          A1 <- (val nom val ...)
+          PUSH      CDR(A1)             empile (nom val ...)
+          CALL      EVALCAR             evalue la valeur
+          XTOPST    A1                  exch la valeur et (nom val ...)
+PSETQ2    BTCONS.S  A1,PSETQ1           il en reste
+          BRA.S     PSETQ4              vers la liaison proprement dite
+PSETQ3    POP       A1                  recupere le nom
+          BFVAR.S   A1,PSETQERR         il faut une variable
+          MOV       A2,CVAL(A1)         force la nouvelle valeur
+PSETQ4    POP       A2                  recup val ou marque
+          BFEQ.S    A2,#MK_SUBRN,PSETQ3 ce n'est pas encore la marque
+          RETURN    *                   et retourne la derniere valeur.
+PSETQERR  MOV       A2,A1               la mauvaise variable
+          MOV       .PSETQ,A2           le nom de la fonction
+          BRA       ERRNVA              il fallait une variable
+ 
+*
+*         NRECONC : SUBR2
+*         optimise les transferts :
+*         3 instructions par doublets
+*
+*----------------------------------------
+          FENTRY    NRECONC,SUBR2
+*----------------------------------------
+          BRA.S     FREV2
+FREV1     MOV       CDR(A1),A3          avance dans la liste
+          MOV       A2,CDR(A1)          change le CDR
+          BFCONS.S  A3,FREVRET          la liste est terminee
+          MOV       CDR(A3),A2          avance dans la liste
+          MOV       A1,CDR(A3)          change le CDR
+          BFCONS.S  A2,FREV9            la liste est terminee
+          MOV       CDR(A2),A1          avance dans la liste
+          MOV       A3,CDR(A2)          change le CDR
+FREV2     BTCONS    A1,FREV1            la liste continue
+          MOV       A2,A1               retourne la nouvelle liste
+          RETURN
+FREV9     MOV       A3,A1               et la aussi.
+FREVRET   RETURN
+ 
+ 
+*
+*         NREVERSE : SUBR1
+*
+*----------------------------------------
+          FENTRY    NREVERSE,SUBR1
+*----------------------------------------
+          MOVNIL    A2                  idem a (NRECONC a1 nil)
+          BRA       FREV2
+ 
+*
+*         NEXTL : SUBRF
+*         n'est definie que sur les variables
+*
+ 
+*----------------------------------------
+          FENTRY    NEXTL,SUBRF
+*----------------------------------------
+          MOV       CAR(A1),A2          A2 <- le nom de l'atome
+          BFVAR.S   A2,NEXTLERR         il faut une variable
+          MOV       CVAL(A2),A3         A3 <- sa C-VAL
+          MOV       CAR(A3),A1          A1 <- le CAR de la C-VAL
+          MOV       CDR(A3),A3          A3 <- le CDR de la C-VAL
+          MOV       A3,CVAL(A2)         force
+          RETURN
+NEXTLERR  MOV       A2,A1               la mauvaise variable
+          MOV       .NEXTL,A2           le nom de la fonction
+          BRA       ERRNVA              il fallait une variable
+ 
+*
+*         (NEWL at s) SUBRF
+*
+*----------------------------------------
+          FENTRY    NEWL,SUBRF
+*----------------------------------------
+          PUSH      CAR(A1)             sauve le nom du symbole
+          MOV       CDR(A1),A1          (s)
+          CALL      EVALCAR             evalue l'expression
+          POP       A2                  recupere le nom du symbole
+          BFVAR.S   A2,NEWLERR          il faut une variable
+          MOV       CVAL(A2),A3         A3 <- ancienne CVAL du symbole
+          XCONS     A3,A1               fabrique la nouvelle valeur
+          MOV       A1,CVAL(A2)         force
+          RETURN
+NEWLERR   MOV       A2,A1               la mauvaise variable
+          MOV       .NEWL,A2            le nom de la fonction
+          BRA       ERRNVA              il fallait une variable
+ 
+*
+*         (NCONC l1 l2)  SUBR2
+*         (NCONC1 l1 l2) SUBR2
+*
+ 
+*----------------------------------------
+          FENTRY    NCONC1,SUBR2
+*----------------------------------------
+          NCONS     A2
+          BRA.S     NCONC
+          NOP                           Fuu!
+ 
+*----------------------------------------
+          FENTRY    NCONC,SUBR2
+*----------------------------------------
+          BTCONS.S  A1,NCONC2           NCONC peut demarrer
+          MOV       A2,A1               sinon retourne le 2eme
+          RETURN
+NCONC2    PUSH      A1                  sauve la valeur de retour
+          BRA.S     NCONC4
+NCONC3    MOV       A3,A1               A1 <- MOV CDR(A1
+NCONC4    MOV       CDR(A1),A3          avance dans la liste 1er argument
+          BTCONS    A3,NCONC3           elle n'est pas terminee
+          MOV       A2,CDR(A1)          force le dernier CDR
+          POP       A1                  et retourne la liste initiale
+          RETURN
+ 
+ 
+*
+*         Fonctions sur P-LISTES
+*         ======================
+ 
+*
+*         Ne supportent que les Plistes des symboles
+*         les indicateurs sont des atomes (predicat EQ)
+*
+*
+*         GET interne teste si l'indic A2 est present dans la
+*         PLIST de A1 qui est un symbole correct (/= de NIL)
+*         Ramene dans A4 le debut de la PLIST de A1 qui commence
+*         a l'indicateur A2 et dans A3 le pointeur precedent.
+*
+ 
+GETI      EQU       *
+          MOV       PLIST(A1),A4        A4 <- la plist du symbole
+          MOV       A1,A3               le 1er pointeur arriere
+          BRA.S     GETI3
+GETI2     BTEQ.S    A2,CAR(A4),GETIRET  c'est tout bon
+          MOV       CDR(A4),A3          saute l'indicateur
+          MOV       CDR(A3),A4          saute la valeur
+GETI3     BTCONS    A4,GETI2            la PLIST se continue
+GETIRET   RETURN
+ 
+ 
+ 
+*----------------------------------------
+          FENTRY    GET,SUBR2
+*----------------------------------------
+          BRA.S     GETPROP             et oui!
+          NOP                           !!! ne pas enlever !!!
+ 
+*----------------------------------------
+          FENTRY    GETPROP,SUBR2
+*----------------------------------------
+          BFSYMB.S  A1,GETERR           il faut un symbole
+          BTNIL.S   A1,GETERR           on ne touche pas a NIL!
+          CALL      GETI                recherche de l'indicateur
+          BFCONS    A4,FALSE            la recherche a echouee
+          MOV       CDR(A4),A4          pointe sur la (valeur)
+          MOV       CAR(A4),A1          ramene la valeur simple
+          RETURN
+GETERR    MOV       .GETPROP,A2         nom de la fonction
+          BRA       ERRNAA              il fallait un symbole
+ 
+ 
+*----------------------------------------
+          FENTRY    GETL,SUBR2
+*----------------------------------------
+          BTNIL.S   A1,GETLERR          on ne touche pas a NIL
+          BFSYMB.S  A1,GETLERR          il faut un symbole
+          BTNIL     A2,FALSE            la liste d'indicateurs est vide
+          BFCONS.S  A2,GETLERR2         ce n'est pas une liste
+          MOV       PLIST(A1),A1        la p-liste du symbole
+          BRA.S     GETL7
+GETL1     MOV       CAR(A1),A3          l'indicateur suivant de la p-list
+          PUSH      A2                  sauve la liste des indics
+GETL2     MOV       CAR(A2),A4
+          BTEQ.S    A3,A4,GETL8         c'est celui-la!
+          POP       A2                  recup la liste des indics
+          MOV       CDR(A2),A2          avance dans la liste
+          BTCONS    A2,GETL2            il en reste
+          POP       A2
+          MOV       CDR(A1),A1          saute l'indicateur
+          MOV       CDR(A1),A1          saute la valeur
+GETL7     BTCONS.S  A1,GETL1            la p-liste continue
+          RETURN    *                   A1 est ok!
+GETL8     POP       A2                  restaure la liste des indics
+          RETURN    *                   A1 est pret
+GETLERR   MOV       .GETL,A2            le nom de la fonction
+          BRA       ERRNAA              il fallait un symbole
+GETLERR2  MOV       A2,A1               le mauvais arg
+          MOV       .GETL,A2            le nom de la fonction
+          BRA       ERRNLA              il fallait une liste
+ 
+ 
+*----------------------------------------
+          FENTRY    ADDPROP,SUBR3
+*----------------------------------------
+          BTNIL.S   A1,ADDPRET          ne pas toucher a NIL
+          BFSYMB.S  A1,ADDPRET          ce doit etre un symbole
+          MOV       PLIST(A1),A4        revcupere l'ancienne pliste.
+          CONS      A2,A4               (val . pl)
+          CONS      A3,A4               (ind val . pl)
+          MOV       A4,PLIST(A1)        force la nouvelle pliste
+          RETURN
+ADDPRET   MOV       .ADDPROP,A2         le nom de la fonction
+          BRA       ERRNAA              il fallait un symbole
+ 
+ 
+*----------------------------------------
+          FENTRY    PUTPROP,SUBR3
+*----------------------------------------
+          BTNIL.S   A1,PUTPERR          on ne touche pas a NIL
+          BFSYMB.S  A1,PUTPERR          ce n'est pas un symbole
+          PUSH      A1                  sauve la P-liste
+          PUSH      A2                  sauve la PVAL
+          PUSH      A3                  sauve la propriete
+          MOV       A3,A2               pour le REMPROP
+          CALL      REMPROP             on enleve d'abord la vieille def
+          POP       A3                  recup la propriete
+          POP       A2                  recup la pval
+          POP       A1                  recup la pliste
+          BRA       ADDPROP             et on rajoute en tete
+PUTPERR   MOV       .PUTPROP,A2         le nom de la fonction
+          BRA       ERRNAA              il fallait un symbole
+ 
+ 
+*----------------------------------------
+          FENTRY    DEFPROP,SUBRF
+*----------------------------------------
+          BTNIL.S   A1,DEFPERR          on ne touche pas a NIL
+          BFSYMB.S  A1,DEFPERR          il faut un symbole
+          MOV       CDR(A1),A4          A4 <- (pval prop)
+          MOV       CAR(A1),A1          A1 <- plist
+          MOV       CAR(A4),A2          A2 <- pval
+          MOV       CDR(A4),A3          A3 <- (prop)
+          MOV       CAR(A3),A3          A3 <- prop
+          BRA       PUTPROP
+DEFPERR   MOV       .DEFPROP,A2         le nom de la fonction
+          BRA       ERRNAA              il fallait un symbole
+ 
+ 
+*----------------------------------------
+          FENTRY    REMPROP,SUBR2
+*----------------------------------------
+          BTNIL.S   A1,REMPERR          on ne touche pas a NIL
+          BFSYMB.S  A1,REMPERR          ce n'est pas un symbole
+          CALL      GETI
+          BFCONS    A4,FALSE            la recherche a echouee
+          MOV       CDR(A4),A2          A2 <- ( val indic val ...)
+          MOV       CDR(A2),A2          A3 <- (indic val ... suivants)
+          BFCONS.S  A2,REMPR4           cas special en fin de p-liste
+          MOV       CAR(A2),A3          indic
+          MOV       A3,CAR(A4)          (DISPLACE A4 (CDDR A4))
+          MOV       CDR(A2),A3
+          MOV       A3,CDR(A4)
+          RETURN
+REMPR4    MOVNIL    CDR(A3)             ferme le pointeur arriere
+          RETURN
+REMPERR   MOV       .REMPROP,A2         le nom de la fonction
+          BRA       ERRNAA              il fallait un symbole
+ 
+ 
+ 
+*
+*         Fonctions sur A-LISTES
+*         ======================
+ 
+*
+*         (ACONS x y z)
+*
+*----------------------------------------
+          FENTRY    ACONS,SUBR3
+*----------------------------------------
+          PUSH      A3
+          XCONS     A2,A1
+          POP       A2
+          XCONS     A2,A1
+          RETURN
+ 
+*
+*         (ASSQ at al)
+*
+*----------------------------------------
+          FENTRY    ASSQ,SUBR2
+*----------------------------------------
+          BFCONS.S  A2,ASSQ2            la liste est vide
+          MOV       A1,A3               prepare le retour
+ASSQ1     MOV       CAR(A2),A1          A1 <- 1er element
+          MOV       CAR(A1),A4          A4 <- la variable
+          BTEQ.S    A4,A3,ASSQRET       c'est le bon
+          MOV       CDR(A2),A2          element suivant
+          BTCONS    A2,ASSQ1            la liste n'est pas vide
+ASSQ2     MOVNIL    A1                  retourne NIL
+ASSQRET   RETURN
+ 
+ 
+*
+*         (ASSOC e al)
+*
+*----------------------------------------
+          FENTRY    ASSOC,SUBR2
+*----------------------------------------
+          BRA.S     ASSO8
+ASSO1     MOV       CAR(A2),A3          A3 <- le couple suivant
+          PUSH      A1                  sauve le test
+          PUSH      A2                  sauve la a-liste
+          PUSH      A3                  sauve le couple
+          MOV       CAR(A3),A2          A2 <- le selecteur
+          CALL      EQUAL               on teste
+          BFNIL.S   A1,ASSO9            c'est ok!
+          POP       A3                  bllsht (le couple)
+          POP       A2                  la a-liste
+          POP       A1                  le teste
+          MOV       CDR(A2),A2          element suivant
+ASSO8     BTCONS.S  A2,ASSO1            la liste n'est pas vide
+          MOVNIL    A1                  retourne NIL
+          RETURN    *                   voila!
+ASSO9     POP       A1                  l'ancien couple
+          POP       A3                  bllsht (la suite de la a-liste)
+          POP       A3                  bllsht (le test)
+          RETURN
+ 
+ 
+*
+*         (CASSQ at al)
+*
+*----------------------------------------
+          FENTRY    CASSQ,SUBR2
+*----------------------------------------
+          BRA.S     CASSQ2              on y va
+CASSQ1    MOV       CAR(A2),A3          A1 <- 1er element
+          MOV       CAR(A3),A4          A4 <- la variable
+          BTEQ.S    A4,A1,CASSQ3        c'est le bon
+          MOV       CDR(A2),A2          element suivant
+CASSQ2    BTCONS    A2,CASSQ1           la liste n'est pas vide
+          MOVNIL    A1                  retourne NIL
+          RETURN
+CASSQ3    MOV       CDR(A3),A1          retourne le CDR de l'element
+          RETURN
+ 
+ 
+*
+*         (CASSOC e al)
+*
+*----------------------------------------
+          FENTRY    CASSOC,SUBR2
+*----------------------------------------
+          BRA.S     CASSO8
+CASSO1    MOV       CAR(A2),A3          A3 <- le couple suivant
+          PUSH      A1                  sauve le test
+          PUSH      A2                  sauve la a-liste
+          PUSH      A3                  sauve le couple
+          MOV       CAR(A3),A2          A2 <- le selecteur
+          CALL      EQUAL               on teste
+          BFNIL.S   A1,CASSO9           c'est ok!
+          POP       A3                  bllsht (le couple)
+          POP       A2                  la a-liste
+          POP       A1                  le teste
+          MOV       CDR(A2),A2          element suivant
+CASSO8    BTCONS.S  A2,CASSO1           la liste n'est pas vide
+          MOVNIL    A1                  retourne NIL
+          RETURN    *                   voila!
+CASSO9    POP       A1                  le couple courant
+          MOV       CDR(A1),A1          on ne retourne que la valeur
+          POP       A3                  bllsht (la suite de la a-liste)
+          POP       A3                  bllsht (le test)
+          RETURN
+ 
+ 
+          END
+ 

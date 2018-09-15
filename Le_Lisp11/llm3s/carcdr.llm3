@@ -1,0 +1,582 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :  les selecteurs CAR/CDR
+*
+****************************************************************
+*
+*                Jerome CHAILLOUX  (Chailloux.Vlsi)
+*                           I.N.R.I.A.
+*                Domaine de Voluceau,  Rocquencourt
+*                B.P. 105,   78153 Le Chesnay Cedex
+*                tel : (1) 954 90 20      poste 456
+*
+*****************************************************************
+ 
+ 
+ 
+          TITRE     CARCDR       LLM3 : les selecteurs CAR/CDR
+ 
+          PURE
+ 
+          XREF      BUILDAT,CSYMB                 pour MAKFNT
+          XREF      .UNDEF,.VOID
+          XREF      ERRNLA
+ 
+          XDEF      INI_CAD
+ 
+*
+*         Creation des symboles
+*         =====================
+*
+ 
+INI_CAD   EQU       *
+          NOLIST
+          MAKFNT    FCAR,0,.VOID,3,'CAR'
+          MAKFNT    FCDR,0,.VOID,3,'CDR'
+          MAKFNT    CAAR,0,.VOID,4,'CAAR'
+          MAKFNT    CADR,0,.VOID,4,'CADR'
+          MAKFNT    CDAR,0,.VOID,4,'CDAR'
+          MAKFNT    CDDR,0,.VOID,4,'CDDR'
+          MAKFNT    CAAAR,0,.VOID,5,'CAAAR'
+          MAKFNT    CAADR,0,.VOID,5,'CAADR'
+          MAKFNT    CADAR,0,.VOID,5,'CADAR'
+          MAKFNT    CADDR,0,.VOID,5,'CADDR'
+          MAKFNT    CDAAR,0,.VOID,5,'CDAAR'
+          MAKFNT    CDADR,0,.VOID,5,'CDADR'
+          MAKFNT    CDDAR,0,.VOID,5,'CDDAR'
+          MAKFNT    CDDDR,0,.VOID,5,'CDDDR'
+          MAKFNT    CAAAAR,0,.VOID,6,'CAAAAR'
+          MAKFNT    CAAADR,0,.VOID,6,'CAAADR'
+          MAKFNT    CAADAR,0,.VOID,6,'CAADAR'
+          MAKFNT    CAADDR,0,.VOID,6,'CAADDR'
+          MAKFNT    CADAAR,0,.VOID,6,'CADAAR'
+          MAKFNT    CADADR,0,.VOID,6,'CADADR'
+          MAKFNT    CADDAR,0,.VOID,6,'CADDAR'
+          MAKFNT    CADDDR,0,.VOID,6,'CADDDR'
+          MAKFNT    CDAAAR,0,.VOID,6,'CDAAAR'
+          MAKFNT    CDAADR,0,.VOID,6,'CDAADR'
+          MAKFNT    CDADAR,0,.VOID,6,'CDADAR'
+          MAKFNT    CDADDR,0,.VOID,6,'CDADDR'
+          MAKFNT    CDDAAR,0,.VOID,6,'CDDAAR'
+          MAKFNT    CDDADR,0,.VOID,6,'CDDADR'
+          MAKFNT    CDDDAR,0,.VOID,6,'CDDDAR'
+          MAKFNT    CDDDDR,0,.VOID,6,'CDDDDR'
+ 
+          RETURN
+ 
+ 
+*
+*         Les fonctions d'acces aux listes.
+*         =================================
+*
+*         Elles ne sont definies que pour les listes
+*         (i.e. les CONS et NIL)
+*
+*
+ 
+*----------------------------------------
+          FENTRY    FCAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CARET
+          BFCONS.S  A1,CARER
+          MOV       CAR(A1),A1
+CARET     RETURN
+CARER     MOV       .FCAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    FCDR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDRET
+          BFCONS.S  A1,CDRER
+          MOV       CDR(A1),A1
+CDRET     RETURN
+CDRER     MOV       .FCDR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CAAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CAARET
+          BFCONS.S  A1,CAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CAARET
+          BFCONS.S  A1,CAARER
+          MOV       CAR(A1),A1
+CAARET    RETURN
+CAARER    MOV       .CAAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CADR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CADRET
+          BFCONS.S  A1,CADRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CADRET
+          BFCONS.S  A1,CADRER
+          MOV       CAR(A1),A1
+CADRET    RETURN
+CADRER    MOV       .CADR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CDAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDARET
+          BFCONS.S  A1,CDARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDARET
+          BFCONS.S  A1,CDARER
+          MOV       CDR(A1),A1
+CDARET    RETURN
+CDARER    MOV       .CDAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CDDR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDDRET
+          BFCONS.S  A1,CDDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDDRET
+          BFCONS.S  A1,CDDRER
+          MOV       CDR(A1),A1
+CDDRET    RETURN
+CDDRER    MOV       .CDDR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CAAAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CAAARET
+          BFCONS.S  A1,CAAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CAAARET
+          BFCONS.S  A1,CAAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CAAARET
+          BFCONS.S  A1,CAAARER
+          MOV       CAR(A1),A1
+CAAARET   RETURN
+CAAARER   MOV       .CAAAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CAADR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CAADRET
+          BFCONS.S  A1,CAADRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CAADRET
+          BFCONS.S  A1,CAADRER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CAADRET
+          BFCONS.S  A1,CAADRER
+          MOV       CAR(A1),A1
+CAADRET   RETURN
+CAADRER   MOV       .CAADR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CADAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CADARET
+          BFCONS.S  A1,CADARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CADARET
+          BFCONS.S  A1,CADARER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CADARET
+          BFCONS.S  A1,CADARER
+          MOV       CAR(A1),A1
+CADARET   RETURN
+CADARER   MOV       .CADAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CADDR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CADDRET
+          BFCONS.S  A1,CADDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CADDRET
+          BFCONS.S  A1,CADDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CADDRET
+          BFCONS.S  A1,CADDRER
+          MOV       CAR(A1),A1
+CADDRET   RETURN
+CADDRER   MOV       .CADDR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CDAAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDAARET
+          BFCONS.S  A1,CDAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDAARET
+          BFCONS.S  A1,CDAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDAARET
+          BFCONS.S  A1,CDAARER
+          MOV       CDR(A1),A1
+CDAARET   RETURN
+CDAARER   MOV       .CDAAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CDADR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDADRET
+          BFCONS.S  A1,CDADRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDADRET
+          BFCONS.S  A1,CDADRER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDADRET
+          BFCONS.S  A1,CDADRER
+          MOV       CDR(A1),A1
+CDADRET   RETURN
+CDADRER   MOV       .CDADR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CDDAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDDARET
+          BFCONS.S  A1,CDDARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDDARET
+          BFCONS.S  A1,CDDARER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDDARET
+          BFCONS.S  A1,CDDARER
+          MOV       CDR(A1),A1
+CDDARET   RETURN
+CDDARER   MOV       .CDDAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CDDDR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDDDRET
+          BFCONS.S  A1,CDDDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDDDRET
+          BFCONS.S  A1,CDDDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDDDRET
+          BFCONS.S  A1,CDDDRER
+          MOV       CDR(A1),A1
+CDDDRET   RETURN
+CDDDRER   MOV       .CDDDR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CAAAAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CAAAARET
+          BFCONS.S  A1,CAAAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CAAAARET
+          BFCONS.S  A1,CAAAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CAAAARET
+          BFCONS.S  A1,CAAAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CAAAARET
+          BFCONS.S  A1,CAAAARER
+          MOV       CAR(A1),A1
+CAAAARET  RETURN
+CAAAARER  MOV       .CAAAAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CAAADR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CAAADRET
+          BFCONS.S  A1,CAAADRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CAAADRET
+          BFCONS.S  A1,CAAADRER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CAAADRET
+          BFCONS.S  A1,CAAADRER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CAAADRET
+          BFCONS.S  A1,CAAADRER
+          MOV       CAR(A1),A1
+CAAADRET  RETURN
+CAAADRER  MOV       .CAAADR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CAADAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CAADARET
+          BFCONS.S  A1,CAADARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CAADARET
+          BFCONS.S  A1,CAADARER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CAADARET
+          BFCONS.S  A1,CAADARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CAADARET
+          BFCONS.S  A1,CAADARER
+          MOV       CAR(A1),A1
+CAADARET  RETURN
+CAADARER  MOV       .CAADAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CAADDR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CAADDRET
+          BFCONS.S  A1,CAADDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CAADDRET
+          BFCONS.S  A1,CAADDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CAADDRET
+          BFCONS.S  A1,CAADDRER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CAADDRET
+          BFCONS.S  A1,CAADDRER
+          MOV       CAR(A1),A1
+CAADDRET  RETURN
+CAADDRER  MOV       .CAADDR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CADAAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CADAARET
+          BFCONS.S  A1,CADAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CADAARET
+          BFCONS.S  A1,CADAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CADAARET
+          BFCONS.S  A1,CADAARER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CADAARET
+          BFCONS.S  A1,CADAARER
+          MOV       CAR(A1),A1
+CADAARET  RETURN
+CADAARER  MOV       .CADAAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CADADR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CADADRET
+          BFCONS.S  A1,CADADRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CADADRET
+          BFCONS.S  A1,CADADRER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CADADRET
+          BFCONS.S  A1,CADADRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CADADRET
+          BFCONS.S  A1,CADADRER
+          MOV       CAR(A1),A1
+CADADRET  RETURN
+CADADRER  MOV       .CADADR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CADDAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CADDARET
+          BFCONS.S  A1,CADDARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CADDARET
+          BFCONS.S  A1,CADDARER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CADDARET
+          BFCONS.S  A1,CADDARER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CADDARET
+          BFCONS.S  A1,CADDARER
+          MOV       CAR(A1),A1
+CADDARET  RETURN
+CADDARER  MOV       .CADDAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CADDDR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CADDDRET
+          BFCONS.S  A1,CADDDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CADDDRET
+          BFCONS.S  A1,CADDDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CADDDRET
+          BFCONS.S  A1,CADDDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CADDDRET
+          BFCONS.S  A1,CADDDRER
+          MOV       CAR(A1),A1
+CADDDRET  RETURN
+CADDDRER  MOV       .CADDDR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CDAAAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDAAARET
+          BFCONS.S  A1,CDAAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDAAARET
+          BFCONS.S  A1,CDAAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDAAARET
+          BFCONS.S  A1,CDAAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDAAARET
+          BFCONS.S  A1,CDAAARER
+          MOV       CDR(A1),A1
+CDAAARET  RETURN
+CDAAARER  MOV       .CDAAAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CDAADR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDAADRET
+          BFCONS.S  A1,CDAADRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDAADRET
+          BFCONS.S  A1,CDAADRER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDAADRET
+          BFCONS.S  A1,CDAADRER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDAADRET
+          BFCONS.S  A1,CDAADRER
+          MOV       CDR(A1),A1
+CDAADRET  RETURN
+CDAADRER  MOV       .CDAADR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CDADAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDADARET
+          BFCONS.S  A1,CDADARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDADARET
+          BFCONS.S  A1,CDADARER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDADARET
+          BFCONS.S  A1,CDADARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDADARET
+          BFCONS.S  A1,CDADARER
+          MOV       CDR(A1),A1
+CDADARET  RETURN
+CDADARER  MOV       .CDADAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CDADDR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDADDRET
+          BFCONS.S  A1,CDADDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDADDRET
+          BFCONS.S  A1,CDADDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDADDRET
+          BFCONS.S  A1,CDADDRER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDADDRET
+          BFCONS.S  A1,CDADDRER
+          MOV       CDR(A1),A1
+CDADDRET  RETURN
+CDADDRER  MOV       .CDADDR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CDDAAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDDAARET
+          BFCONS.S  A1,CDDAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDDAARET
+          BFCONS.S  A1,CDDAARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDDAARET
+          BFCONS.S  A1,CDDAARER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDDAARET
+          BFCONS.S  A1,CDDAARER
+          MOV       CDR(A1),A1
+CDDAARET  RETURN
+CDDAARER  MOV       .CDDAAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CDDADR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDDADRET
+          BFCONS.S  A1,CDDADRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDDADRET
+          BFCONS.S  A1,CDDADRER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDDADRET
+          BFCONS.S  A1,CDDADRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDDADRET
+          BFCONS.S  A1,CDDADRER
+          MOV       CDR(A1),A1
+CDDADRET  RETURN
+CDDADRER  MOV       .CDDADR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CDDDAR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDDDARET
+          BFCONS.S  A1,CDDDARER
+          MOV       CAR(A1),A1
+          BTNIL.S   A1,CDDDARET
+          BFCONS.S  A1,CDDDARER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDDDARET
+          BFCONS.S  A1,CDDDARER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDDDARET
+          BFCONS.S  A1,CDDDARER
+          MOV       CDR(A1),A1
+CDDDARET  RETURN
+CDDDARER  MOV       .CDDDAR,A2
+          BRA       ERRNLA
+ 
+*----------------------------------------
+          FENTRY    CDDDDR,SUBR1
+*----------------------------------------
+          BTNIL.S   A1,CDDDDRET
+          BFCONS.S  A1,CDDDDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDDDDRET
+          BFCONS.S  A1,CDDDDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDDDDRET
+          BFCONS.S  A1,CDDDDRER
+          MOV       CDR(A1),A1
+          BTNIL.S   A1,CDDDDRET
+          BFCONS.S  A1,CDDDDRER
+          MOV       CDR(A1),A1
+CDDDDRET  RETURN
+CDDDDRER  MOV       .CDDDDR,A2
+          BRA       ERRNLA
+ 
+          END
+ 

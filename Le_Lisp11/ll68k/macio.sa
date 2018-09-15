@@ -1,0 +1,177 @@
+*************************************************************
+*						*
+*	    Les Macros LLM3	pour les entrees/sorties	*
+*						*
+*************************************************************
+*						*
+*		  Jerome	 CHAILLOUX		*
+*						*
+*		  I . N .	R . I . A	.		*
+*	     Domaine de Voluceau, Rocquencourt		*
+*	     B.P.	105   78153 Le Chesnay Cedex		*
+*	     Tel : (1) 954 90 20   poste 456		*
+*						*
+*************************************************************
+
+
+	NOLIST
+
+*==================================================
+*	Macros speciales d'entree/sortie
+*==================================================
+
+
+
+*
+*	Gestion du canal terminal
+*	-------------------------
+*
+
+*	TTYIN   op1,op2   car -> op1	cc -> op2
+*	voir les macros standard
+
+
+*	TTYOUT op1,buff,op2
+*	sort 'op1' caracteres du tampon 'buff'.	cc -> op2
+*	voir lesmacros standard
+
+
+*
+*	Gestion des fichiers ROM
+*	------------------------
+*
+
+*	ROMFILE	adr,cc	ouvre la ROM
+
+ROMFILE	MACRO
+	MOVE.L	\1,A0
+	XREF	LL_ROM
+	JSR	LL_ROM
+	MOVE.L	A0,\2
+	ENDM
+
+*	ROMIN	where,cc	recupere le caractere suivant
+
+ROMIN	MACRO
+	XREF	LL_ROC
+	MOVE.L	A0,\1
+	ENDM
+
+*
+*	Gestion des fichiers
+*	--------------------
+*
+
+*	INFILE	chan,file,cc       ouverture d'un fichier d'entree
+
+INFILE	MACRO
+	MOVE.L	\1,D1		numero du	canal
+	CLR.L	D0
+	MOVE.W	PLEN(\2),D0
+	LEA	PNAME(\2),A0
+	XREF	LL_OPI
+	JSR	LL_OPI		on ouvre
+	MOVE.L	A0,\3		code erreur
+	ENDM
+
+*	INBF chan,adr,siz,cc    lecture de la ligne suivante sur fichier
+
+INBF	MACRO
+	MOVE.L	\1,D1	canal
+	LEA	\2,A0	adr
+	XREF	LL_IBC
+	JSR	LL_IBC	pascal
+	MOVE.L	D0,\3	la taille
+	MOVE.L	A0,\4	le cc!
+	ENDM
+
+
+*	OUFILE  chan,file,cc	ouverture	d'un fichier de sortie
+
+OUFILE	MACRO
+	MOVE.L	\1,D1		numero du	canal
+	CLR.L	D0
+	MOVE.W	PLEN(\2),D0
+	LEA	PNAME(\2),A0	nom du fichier
+	XREF	LL_OPO
+	JSR	LL_OPO		on ouvre
+	MOVE.L	A0,\3		code erreur
+	ENDM
+
+*	OUTF	chan,adr,size,cc	sort une chaine de caracteres
+*				en memoire
+
+OUTF	MACRO
+	MOVE.L	\1,D1	prepare le numero du canal
+	LEA	\2,A0	prepare l'adresse
+	MOVE.L	\3,D0	prepare la taille
+	XREF	LL_SFO
+	JSR	LL_SFO	impression physique
+	MOVE.L	A0,\4
+	ENDM
+
+
+*	FCLOS ch,cc	   ferme le canal ch
+
+FCLOS	MACRO
+	MOVE.L	\1,D1		numero du	canal
+	XREF	LL_CLO
+	JSR	LL_CLO		et on le ferme
+	MOV	A0,\2		retourne le cc
+	ENDM
+
+*	FDELE fil,cc	   detruit le fichier fil
+
+FDELE	MACRO
+	CLR.L	D0
+	MOVE.W	PLEN(\1),D0
+	LEA	PNAME(\1),A0
+	XREF	LL_DEL
+	JSR	LL_DEL
+	MOV	A0,\2		le cc
+	ENDM
+
+*	FRENA old,new,cc	   renomme un fichier
+*	?!?!!? a finir
+
+FRENA	MACRO
+	LEA	PLEN(\2),A0
+	MOVE.L	A0,D0
+	LEA	PLEN(\1),A0
+	XREF	LL_REN
+	JSR	LL_REN
+	MOV	A0,\3
+	ENDM
+
+*	CORSAV file,cc	sauve iune image memoire
+
+CORSAV	MACRO
+*	 CLR.L	 D0
+*	 MOVE.W	 PLEN(\1),D0
+*	 LEA	 PNAME(\1),A0
+	LEA	PLEN(\1),A0
+	XREF	LL_CORSAV
+	JSR	LL_CORSAV
+	MOV	A0,\2
+	ENDM
+
+*	COREST file,cc	restaure une image memoire
+
+COREST	MACRO
+	CLR.L	D1		canal INPUT
+	XREF	LL_CLO
+	JSR	LL_CLO		on le ferme
+*	 CLR.L	 D0
+*	 MOVE.W	 PLEN(\1),D0
+*	 LEA	 PNAME(\1),A0
+	LEA	PLEN(\1),A0
+	XREF	LL_COREST
+	JSR	LL_COREST
+	MOV	A0,\2
+	ENDM
+
+
+
+
+
+

@@ -1,0 +1,23 @@
+POUR C :S :N
+SI :N = 0 ALORS [AV :S STOP ]
+C :S :N - 1
+TD 90
+C :S :N - 1
+TG 90
+FIN
+ 
+POUR GDRAG :S :N
+SI :N = 0 ALORS [AV :S STOP ]
+GDRAG :S :N - 1
+TG 90
+DDRAG :S :N - 1
+FIN
+ 
+POUR DDRAG :S :N
+SI :N = 0 ALORS [AV :S STOP ]
+GDRAG :S :N - 1
+TD 90
+DDRAG :S :N - 1
+FIN
+ 
+

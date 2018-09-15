@@ -1,0 +1,913 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :  l'evaluateur (1ere partie)
+*
+****************************************************************
+*
+*                Jerome CHAILLOUX  (Chailloux.Vlsi)
+*                           I.N.R.I.A.
+*                Domaine de Voluceau,  Rocquencourt
+*                B.P. 105,   78153 Le Chesnay Cedex
+*                tel : (1) 954 90 20      poste 456
+*
+*****************************************************************
+ 
+ 
+ 
+          TITRE     EVAL       LLM3 : l'evaluateur.
+ 
+ 
+          XREF      BUILDAT,CSYMB       pour MAKFNT
+          XREF      MSTACK,ERRFS        pour CHKSTK
+          XREF      POPJ,FALSE,TRUE
+          XREF      PROBJ,PROBJT
+          XREF      GC,ERRNAA,ERRNNA,ERRNLA
+          XREF      ERRUDV,ERRUDF,ERRUDT,ERRWNA,ERRWLA
+          XREF      NREVERSE
+          XREF      .UNDEF,.T,.VOID
+ 
+          XDEF      INI_EVAL,U_EVAL
+          XDEF      EVALCAR,EVALA1,EVFEXP,ITSOFT,PROGNA3,FINDTAG
+          XDEF      .QUOTE,.LAMBDA,.INTERNAL,.LIST
+          XDEF      EVALCH,EVALST,FORME,FUNCT,PBIND,SAVEP,SAVECH
+ 
+ 
+*
+*         Donnees vives de l'interprete
+*         =============================
+*
+ 
+          IMPURE
+ 
+EVALCH    ADR       0         etat de l'interprete : CHRONOLOGIE
+EVALST    ADR       0         indicateur de TRACE (0 ou <> 0)
+FORME     ADR       0         la forme a evaluer
+FUNCT     ADR       0         la fonction a evaluer (si erreur)
+PBIND     ADR       0         pointeur sur le bloc de controle courant
+SAVEP     ADR       0         sauvetage temporaire du SP
+SAVECH    ADR       0         sauvetage temp d'une chronologie
+SAVEA3    ADR       0         sauvetage temp d'une adresse de retour
+ 
+ 
+*
+*         Initialisation de l'evaluateur
+*         ==============================
+*
+ 
+          PURE
+ 
+INI_EVAL  EQU       *
+          NOLIST
+          MAKFNT    EVAL,0,.VOID,4,'EVAL'
+          MAKFNT    TRACEVAL,0,.VOID,8,'TRACEVAL'
+          MAKFNT    STEPEVAL,0,.VOID,8,'STEPEVAL'
+          MAKFNT    APPLY,0,.VOID,5,'APPLY'
+          MAKFNT    APPLYN,0,.VOID,7,'FUNCALL'
+          MAKFNT    QUOTE,0,.VOID,5,'QUOTE'
+          MAKFNT    FUNCTION,0,.VOID,8,'FUNCTION'
+          MAKFNT    LAMBDA,0,.VOID,6,'LAMBDA'
+          MAKFNT    INTERNAL,0,.VOID,8,'INTERNAL'
+          MAKFNT    NLAMBDA,0,.VOID,12,'LAMBDA-NAMED'
+          MAKFNT    INTERNAL,0,.VOID,8,'INTERNAL'
+          MAKFNT    ID,0,.VOID,8,'IDENTITY'
+          MAKFNT    COMMENT,0,.VOID,7,'COMMENT'
+          MAKFNT    DECLARE,0,.VOID,7,'DECLARE'
+          MAKFNT    PROGN,0,.VOID,5,'PROGN'
+          MAKFNT    EPROGN,0,.VOID,6,'EPROGN'
+          MAKFNT    PROG1,0,.VOID,5,'PROG1'
+          MAKFNT    PROG2,0,.VOID,5,'PROG2'
+          MAKFNT    LIST,0,.VOID,4,'LIST'
+          MAKFNT    EVLIS,0,.VOID,5,'EVLIS'
+          MAKFNT    TAG,0,.VOID,3,'TAG'
+          MAKFNT    EVTAG,0,.VOID,5,'EVTAG'
+          MAKFNT    EXIT,0,.VOID,4,'EXIT'
+          MAKFNT    EVEXIT,0,.VOID,6,'EVEXIT'
+          MAKFNT    BARRIER,0,.VOID,13,'CATCH-ALL-BUT'
+          MAKFNT    PROTECT,0,.VOID,14,'UNWIND-PROTECT'
+          MAKFNT    LET,0,.VOID,3,'LET'
+          MAKFNT    LETSEQ,0,.VOID,6,'LETSEQ'
+          MAKFNT    LETV,0,.VOID,4,'LETV'
+          MAKFNT    FLET,0,.VOID,4,'FLET'
+ 
+          MAKCSTS   RARROW,0,.VOID,3,$2D,$3E,$20          ->
+          MAKCSTS   LARROW,0,.VOID,3,$3C,$2D,$20          <-
+ 
+ 
+          MAKCST    BIND0,0,.VOID,7,<'$CBIND0'>
+          MOVAD     CBIND0,A1           adresse du point d'entree
+          MOV       .BIND0,A2           adresse du symbole $BIND0
+          MOV       A1,CVAL(A2)         et on charge.
+          MAKCST    BIND1,0,.VOID,7,<'$CBIND1'>
+          MOVAD     CBIND1,A1
+          MOV       .BIND1,A2
+          MOV       A1,CVAL(A2)
+          MAKCST    BIND2,0,.VOID,7,<'$CBIND2'>
+          MOVAD     CBIND2,A1
+          MOV       .BIND2,A2
+          MOV       A1,CVAL(A2)
+          MAKCST    BINDN,0,.VOID,7,<'$CBINDN'>
+          MOVAD     CBINDN,A1           adresse du point d'entree
+          MOV       .BINDN,A2           adresse du symbole $BINDN
+          MOV       A1,CVAL(A2)         et on charge.
+          MAKCST    BINDE,0,.VOID,7,<'$CBINDE'>
+          MOVAD     CBINDE,A1           adresse du point d'entree
+          MOV       .BINDE,A2           adresse de l'atome $BINDE
+          MOV       A1,CVAL(A2)         et on charge
+          MAKCST    APBIND,0,.VOID,6,<'$PBIND'>
+          MOVAD     PBIND,A1            adresse du mot PBIND
+          MOV       .APBIND,A2          adresse de l'atome $PBIND
+          MOV       A1,CVAL(A2)         et on charge
+          MAKCST    AEXIT,0,.VOID,5,<'$EXIT'>
+          MOVAD     CEXIT,A1            adresse de la routine
+          MOV       .AEXIT,A2           adress de l'atome $EXIT
+          MOV       A1,CVAL(A2)         et on charge
+          MAKCST    ATAG,0,.VOID,4,<'$TAG'>
+          MOVAD     CTAG,A1             adresse de la routine
+          MOV       .ATAG,A2            adresse de l'atome $TAG
+          MOV       A1,CVAL(A2)         et on charge
+ 
+*                                       Fabrication des constantes
+          MOV       .QUOTE,A1
+          MOV       A1,CVAL(A1)
+          MOV       .LAMBDA,A1
+          MOV       A1,CVAL(A1)
+*
+          MOVNIL    EVALST              status NIL
+          RETURN
+ 
+ 
+*========================================
+*
+*         Le code de EVAL proprement dit
+*
+*========================================
+ 
+          PURE
+ 
+*
+*         U_EVAL eval du toplevel
+*         =======================
+*
+ 
+U_EVAL    EQU       *
+          CALL      EVALA1
+          RETURN
+ 
+ 
+*----------------------------------------------------------------------
+*
+*         Interprete : EVAL
+*
+*----------------------------------------------------------------------
+ 
+*
+*         EVAL : SUBR1
+*         A1 <- la forme a evaluer
+*
+*----------------------------------------
+          FENTRY    EVAL,SUBR1
+*----------------------------------------
+          BRA.S     EVALA1              vers l'eval interne.
+ 
+ 
+*
+*         Trace de EVAL : (TRACEVAL e)
+*
+*----------------------------------------
+          FENTRY    TRACEVAL,SUBR1
+*----------------------------------------
+          PUSH      EVALST              sauve le STEP
+          PUSH      EVALCH              sauve l'ancienne chrono
+          MOV       .T,EVALST           T = trace active
+          PUSH      PBIND               sauve l'ancien PBIND
+          PUSH      #3                  type du bloc STEPEVAL
+          STACK     PBIND               sauve le pointeur de pile courant
+          PUSHAD    UNBIND              pour delier ce bloc
+          BRA.S     EVALAN              et on evalue A1 SANS trace!
+ 
+*
+*         EVAL interne
+*
+ 
+*                                       **** (EVAL (CAR A1)) interne
+EVALCAR   EQU       *
+          MOV       CAR(A1),A1          A1 <- (CAR A1)
+*                                       **** (EVAL A1) avec test interruption
+EVALA1    EQU       *
+          BFNIL.S   EVALST,EVALT        il y a une trace active
+*                                       **** (EVAL A1) sans test interruption
+EVALAN    EQU       *
+          BTCST.S   A1,EVALRET          c'est une constante, on rentre.
+          BTCONS    A1,EVALIS           si c'est une liste
+*                                       c'est donc un symbole
+ 
+*
+*         Evaluation des symboles atomiques
+*
+ 
+EVALAT    EQU       *
+          MOV       A1,A2               on sauve le nom si erreur
+          MOV       CVAL(A1),A1         charge la valeur du symbole
+          BTEQ.S    A1,.UNDEF,EVALERA8  c'est indefini : erreur.
+EVALRET   RETURN    *                   sinon je rentre de suite
+ 
+*
+*         Erreur variable indefinie
+*
+ 
+EVALERA8  EQU       *
+          MOV       A2,A1               le mauvais argument
+          MOV       .EVAL,A2            nom de la fonction
+          BRA       ERRUDV              erreur standard
+ 
+ 
+*
+*         Les interruptions de EVAL : EVALT STEPEVAL
+*         ==========================================
+*
+ 
+*                                       si TRACEVAL non NIL
+EVALT     EQU       *
+          MOVNIL    EVALST              efface la trace
+          MOV       A1,A2               A2 <- la forme
+          NCONS     A2                  A2 <- (forme)
+          MOV       .STEPEVAL,A1        nom de la fonction
+          CALL      ITSOFT              donc (APPLY STEPEVAL (forme))
+          MOV       .T,EVALST           repositionne la trace
+          RETURN    *                   et on retourne la valeur
+ 
+ 
+*
+*         La fonction STEPEVAL standard
+*         realise une trace de tous les appels internes de EVAL
+*         l'argument est la forme qui devait etre evaluee
+*
+*----------------------------------------
+          FENTRY    STEPEVAL,SUBR1
+*----------------------------------------
+          PUSH      A1                  sauve la forme
+          MOV       .RARROW,A1          charge le symbole ->
+          CALL      PROBJ               on l'imprime
+          TOPST     A1                  recupere le sommet de pile
+          CALL      PROBJT              qui est aussi imprime
+          POP       A1                  recupere vraiment la forme
+          MOV       A2,EVALCH           prepare la chrono
+          CALL      TRACEVAL            et on appelle EVAL avec trace
+          PUSH      A1                  sauve la valeur de l'evaluation
+          MOV       .LARROW,A1          charge la fleche gauche
+          CALL      PROBJ               qui est imprimee
+          TOPST     A1                  consulte le sommet de pile
+          CALL      PROBJT              imprime avec terpri
+          POP       A1                  il faut bien ramener qcq
+          RETURN    *                   et voila
+ 
+ 
+*
+*         Evaluation des formes
+*         =====================
+*
+ 
+EVALIS    EQU       *
+*                                       evalue la forme A1
+          CHKSTK    MSTACK,ERRFS
+          MOV       A1,FORME            pour les macros et les erreurs
+          MOV       CAR(A1),A2          A2 <- la fonction
+          MOV       CDR(A1),A1          A1 <- la liste des arguments
+EVALFU    EQU       *
+*                                       evalue fnt=A1, larg=A2
+          BTNUMB    A2,UDFER            la fonction est un nombre = erreur.
+          BTCONS.S  A2,EVALFLI          la fonction est une liste
+*                                       la fonction est donc un symbole
+ 
+EVALFAT   EQU       *
+          MOV       A2,FUNCT            sauve le nom de la fonction.
+          PUSH      FVAL(A2)            empile la FVAL du symbole fonction
+          GFTYPE    A2,A3               recupere le code FTYPE
+*                                       evaluation d'une forme INTERNAL
+EVALIN    EQU       *
+          JUMPX     TEVAL,A3            realise l'aiguillage sur le type
+*
+* Table du branchement indirect indexe  sur le F-TYP de EVAL
+* On effectue une rupture de sequence avec :
+*         - A1 <- la liste des arguments
+*         - A2 <- le nom de la fonction
+*         - A3 <- le F-TYPE code de la fonction
+*         - pile <- la F-VAL de la fonction
+*
+ 
+TEVAL     ADR       UDFE              * code 0  : pas de definition
+          ADR       EVAL0             * code 1  : SUBR a 0 argument
+          ADR       EVAL1             * code 2  : SUBR a 1 argument
+          ADR       EVAL2             * code 3  : SUBR a 2 arguments
+          ADR       EVAL3             * code 4  : SUBR a 3 arguments
+          ADR       EVALN             * code 5  : SUBR a N argumemnts
+          ADR       EVALF             * code 6  : SUBRF
+          ADR       EVEXP             * code 7  : EXPR
+          ADR       EVFEXP            * code 8  : FEXPR
+          ADR       EVMAC             * code 9  : MACRO
+          ADR       EVALV1            * code 10 : SUBR a 1 argument (ss test)
+          ADR       EVALV2            * code 11 : SUBR a 2 arguments (ss test)
+          ADR       EVALV3            * code 12 : SUBR a 3 arguments (ss test)
+          ADR       EVALVN            * code 13 : SUBR a N arguments en pile
+ 
+*
+*         Evaluation des fonctions speciales
+*
+ 
+EVALFLI   EQU       *
+*                                       la fonction est une liste
+          MOV       CAR(A2),A3          A3 <- fonction de la fonction
+          BTEQ.S    A3,.LAMBDA,EVALL    c'est une lambda explicite
+          BTEQ.S    A3,.INTERNAL,EVALI  c'est une fonction INTERNAL
+          PUSH      A1                  sinon on sauve la liste des arguments
+          MOV       A2,A1               prepare l'appel de EVAL
+          CALL      EVALA1              evalue de nom de la fonction
+          MOV       A1,A2               A2 <- valeur de la fonction
+          POP       A1                  recupere la liste des arguments
+          CONS      A2,A1               refabrique une forme
+          BRA       EVALIS              et on y va.
+ 
+ 
+EVALL     EQU       *
+*                                       la fonction est une LAMBDA explicite
+          PUSH      CDR(A2)             sauve ((larg) ....)
+          BRA       EVEXP               et on est compatible.
+ 
+ 
+EVALI     EQU       *
+*                                       la fonction est INTERNAL explicite
+          MOV       CDR(A2),A2          A2 <- (ftype fval)
+          MOV       CAR(A2),A3          A3 <- ftype
+          MOV       CDR(A2),A2          A2 <- (fval)
+          PUSH      CAR(A2)             empile la fval
+          BRA       EVALIN              et on est compatible
+ 
+ 
+UDFE      EQU       *
+*
+*         l'atome n'a pas de fonction associee : indirection sur C-VAL.
+*
+          POP       A3                  nettoie l'ancienne FVAL
+          MOV       CVAL(A2),A3         indirection sur la CVAL
+          BTCST.S   A3,UDFER            la CVAL est une constante
+          MOV       CVAL(A3),A4         test de constante
+          BTEQ.S    A3,A4,UDFER         oui : evite le bouclage.
+          MOV       A3,A2               change la fonction
+          BRA       EVALFU              et on re-evalue l'ensemble.
+ 
+*
+*         Erreurs dans les formes
+*
+ 
+UDFER     EQU       *                   'undefined function'
+          MOV       A2,A1               A1 le nom de la fonction deffectueux
+          MOV       .EVAL,A2            A2 le nom de l'endroit ou erreur
+          BRA       ERRUDF              'fonction indefinie'
+ 
+WNAER     EQU       *                   'wrong number of arguments'
+          MOV       FUNCT,A2            le nom de la fonction en erreur
+          BRA       ERRWNA
+ 
+WLAER     EQU       *                   'wrong list of arguments'
+          MOV       FORME,A1            le mauvais argument
+          MOV       .EVAL,A2            le nom de la fonction
+          BRA       ERRWLA
+ 
+ 
+*----------------------------------------------------------------------
+*
+*         Evaluation rapide de type SUBR
+*
+*----------------------------------------------------------------------
+ 
+ 
+EVAL0     EQU       *
+*                                       *** traitement des SUBR0
+          BFNIL     A1,WNAER            il y a des arguments!
+          RETURN    *                   on tombe sur la FVAL empilee !
+ 
+EVAL1     EQU       *
+*                                       *** traitement des SUBR1
+          BFCONS.S  A1,EVAL1E1          il faut une liste
+          BTNIL     CDR(A1),EVALCAR     il n'y a qu'1 arg
+          MOV       CDR(A1),A1          les args en trop
+EVAL1E1   BRA       WNAER
+ 
+EVALV1    EQU       *
+*                                       *** traitement des SUBRV1
+          BRA       EVALCAR             c'est le plus rapide!
+ 
+EVAL2     EQU       *
+*                                       *** traitement des SUBR2
+          BFCONS.S  A1,EVAL2E2          il faut 2 args
+          MOV       CAR(A1),A2          le 1er arg non evalue
+          MOV       CDR(A1),A1          le reste des arguments
+          BFCONS.S  A1,EVAL2E2          il n'y avait qu'un argument
+          PUSH      CAR(A1)             sauve le 2eme argument non evalue
+          MOV       CDR(A1),A1          y a t il des arguments supplementaires
+          BFNIL.S   A1,EVAL2E1          oui : erreur.
+          MOV       A2,A1               recup le 1er arg non evalue
+          CALL      EVALA1              on l'evalue.
+          XTOPST    A1                  echange le reste <-> val du 1er
+          CALL      EVALA1              on evalue le 2eme
+          MOV       A1,A2               positionne le 2eme arg
+          POP       A1                  recuperer le 1er
+          RETURN    *                   et on tombe sur la FVAL empilee
+EVAL2E1   POP       A3                  nettoie la pile
+EVAL2E2   BRA       WNAER               puis vers l'erreur standard
+ 
+EVALV2    EQU       *
+*                                       *** traitement des SUBRV2
+          PUSH      CDR(A1)             sauve le restedes arguments
+          CALL      EVALCAR             evalue le 1er
+          XTOPST    A1                  echange le reste <-> val du 1er
+          CALL      EVALCAR             evalue le suivant
+          MOV       A1,A2               positionne le 2eme arg
+          POP       A1                  recuperer le 1er
+          RETURN    *                   et on tombe sur la FVAL empilee
+ 
+EVAL3     EQU       *
+*                                       *** traitement des SUBR3
+          BFCONS.S  A1,EVAL3E4          qu'est-ce que ca veut dire !
+          PUSH      CDR(A1)             sauve le reste des arguments
+          CALL      EVALCAR             evalue le 1er arg
+          XTOPST    A1                  ech le reste <-> val du 1er
+          BFCONS.S  A1,EVAL3E3          bizarre
+          PUSH      CDR(A1)             resauve le reste
+          CALL      EVALCAR             evalue le 2eme
+          XTOPST    A1                  ech lereste <-> val du 2eme
+          BFCONS.S  A1,EVAL3E2          bizarre
+          BFNIL.S   CDR(A1),EVAL3E1     plus de 3 args ?!
+          CALL      EVALCAR             evalue le 3eme
+          MOV       A1,A3               positionne le 3eme arg
+          POP       A2                  positionne le 2eme arg
+          POP       A1                  positionne le 1er arg
+          RETURN    *                   et on tombe sur la FVAL empilee!
+EVAL3E1   MOV       CDR(A1),A1          les args en trop
+EVAL3E2   POP       A3                  les args precedemment
+EVAL3E3   POP       A3                     empiles
+EVAL3E4   BRA       WNAER               erreur mauvais nb d'args!
+ 
+EVALV3    EQU       *
+*                                       *** traitement des SUBRV3
+          PUSH      CDR(A1)             sauve le reste des arguments
+          CALL      EVALCAR             evalue le 1er arg
+          XTOPST    A1                  ech le reste <-> val du 1er
+          PUSH      CDR(A1)             resauve le reste
+          CALL      EVALCAR             evalue le 2eme
+          XTOPST    A1                  ech lereste <-> val du 2eme
+          CALL      EVALCAR             evalue le 3eme
+          MOV       A1,A3               positionne le 3eme arg
+          POP       A2                  positionne le 2eme arg
+          POP       A1                  positionne le 1er arg
+          RETURN    *                   et on tombe sur la FVAL empilee!
+ 
+*
+*         (EVLIS <l>)
+*
+*----------------------------------------
+          FENTRY    EVLIS,SUBR1
+*----------------------------------------
+EVALN     EQU       *
+*                                       *** evalue les SUBRN
+          BFCONS.S  A1,LISTRET          ya rien a faire
+          PUSH      CDR(A1)             sauve le reste
+          CALL      EVALCAR             evalue la 1ere valeur
+          POP       A3                  A3 <- le reste des valeurs
+          NCONS     A1                  (1ereval)
+          PUSH      A1                  sauve la 1ere tete
+LIST1     EQU       *
+          BFCONS.S  A3,LIST2            yen a pu
+          PUSH      A1                  sauve le dernier doublet cree
+          PUSH      CDR(A3)             sauve le reste des elements
+          MOV       CAR(A3),A1          A1 <- le 1er element suivant
+          CALL      EVALA1              on l'evalue
+          POP       A3                  A3 <- le reste des elements
+          NCONS     A1                  fabrique (val)
+          POP       A2                  recup le dernier doublet cree
+          MOV       A1,CDR(A2)          accroche le nouveau doublet
+          BRA.S     LIST1               et on fait les autres.
+LIST2     POP       A1                  A1 <- adresse du 1er doublet cree
+LISTRET   RETURN    *                   et c'est tout.
+ 
+ 
+EVALVN    EQU       *
+*                                       *** traitement des SUBRVN
+          POP       A3                  l 'adresse de lancement (FVAL)
+          MOV       #0,A4               le compteur d'arg NARG
+          BRA.S     EVALVN2             on y va
+EVALVN1   PUSH      A4                  sauve le compteur
+          PUSH      A3                  sauve la FVAL
+          PUSH      CDR(A1)             sauve le reste des arguments
+          CALL      EVALCAR             evalue l'argument suivant
+          MOV       A1,A2               A2 <- la valeur de l'argument
+          POP       A1                  recup le reste des arguments
+          POP       A3                  recup l'adresse de retour
+          POP       A4                  recupere le compteur NARG
+          PUSH      A2                  empile la valeur
+          INCR      A4                  actualise NARG
+EVALVN2   BTCONS    A1,EVALVN1          il reste des arguments
+          JUMPI     A3                  vers la FVAL
+ 
+EVALF     EQU       *
+*                                       *** traitement des SUBRF
+          RETURN    *                   tombe sur la FVAL
+ 
+ 
+*----------------------------------------------------------------------
+*
+*                   Evaluation des EXPR
+*
+*         Fabrique dans la pile un bloc de controle de type 0 : LAMBDA
+*
+*                              [        UNBIND           ]
+*              PBIND  ->       [           0             ]
+*                              [ F-VAL de la fonction    ]
+*                              [ nom de la variable N    ]
+*                              [ son ancienne valeur     ]
+*                                    ..........
+*                                    ..........
+*                              [ nom de la variable 1    ]
+*                              [ son ancienne valeur     ]
+*                              [       ' *MARK*          ]
+*                              [     ancien PBIND        ]
+*                              ---------------------------
+*----------------------------------------------------------------------
+ 
+EVEXP     EQU       *
+          TOPST     A4                  A4 <- la FVAL qui reste empilee
+          MOV       CAR(A4),A2          A2 <- la liste des parametres
+          PUSH      #MK_EVAL            marque la pile
+          BRA.S     EVEXP2
+ 
+*
+*          Fabrication des emplacements en pile et evaluation
+*
+ 
+EVEXP1    EQU       *
+          BTCONS.S  A1,EVEXP11          c'est une liste de valeurs
+          BFNIL     A1,WLAER            ce n'est pas une belle liste
+EVEXP11   EQU       *
+          PUSH      CDR(A1)             empile le reste des valeurs
+          PUSH      A2                  empile toutes les variables
+          CALL      EVALCAR             evalue l'argument
+          POP       A2                  recup toutes les variables
+          XTOPST    A1                  force la valeur evaluee
+          PUSH      CAR(A2)             empile le nom de la variable
+          MOV       CDR(A2),A2          variable suivante
+EVEXP2    EQU       *
+          BTCONS.S  A2,EVEXP1           il en reste
+          BTNIL.S   A2,EVEXP3           c'est vraiment la fin
+          PUSH      A2                  sauve le nom
+          CALL      EVLIS               evalue le reste des arguments
+          XTOPST    A1                  empile la val et recup le nom
+          PUSH      A1                  re-empile le nom
+ 
+*
+*         Effectue la liaison superficielle
+*         Attention : utilise un autre pointeur de pile!
+*         <<< si ca change, verifier les fonctions compilees $CBINDE
+*         car tout le code est duplique jusqu'a UNBIND >>>
+ 
+EVEXP3    EQU       *
+          STACK     A4                  A4 devient le SP de travail !
+          BRA.S     EVEXP5              et au boulot.
+EVEXP4    EQU       *
+          MOV       CVAL(A2),A1         recupere l'ancienne C-VAL
+          XTOPST    A1,A4               qui est sauvee en pile
+          MOV       A1,CVAL(A2)         effectue la nouvelle liaison
+          POP       A1,A4               saute la valeur
+EVEXP5    EQU       *
+          POP       A2,A4               lecture de la nouvelle variable
+          BFEQ.S    A2,#MK_EVAL,EVEXP4  il y en a encore
+          MOV       PBIND,A1            pour le XTOPST suivant
+          XTOPST    A1,A4               force PBIND et recupere la FVAL
+ 
+*
+*         Test de recursion terminale
+*
+ 
+          POP       A2,A4               saute le PBIND
+          MOV       A4,A3               en cas de tail-rec devient sommet pile
+          POP       A2,A4               le sommet de pile
+          BFEQ.S    A2,#UNBIND,EVEXPN   ce n'est pas terminal.
+          POP       A2,A4               le type du bloc
+          BFEQ.S    A2,#0,EVEXPN        ce n'est pas un bloc lambda
+          POP       A2,A4               la Fval associee
+          BFEQ.S    A2,A1,EVEXPN        ce n'est pas recursif.
+ 
+*                                       C'est donc tail-rec !
+          SSTACK    A3                  tete du precedent bloc
+          MOV       CDR(A1),A1          A1 <- le corps
+          BRA       PROGN               et je fais un JUMP!
+ 
+ 
+*                                       C'est donc un corps normal
+*
+EVEXPN    EQU       *
+EVEXPF    EQU       *
+          PUSH      A1                  empile la Fval a evaluer
+          PUSH      #0                  empile le code du bloc
+          STACK     PBIND               sauve le pointeur de pile
+ 
+*
+*         execution du corps de la fonction
+*
+ 
+EVEXPG    EQU       *
+          MOV       CDR(A1),A1          A1 <- le corps
+          CALL      PROGN               qui est evalue
+*                                       *** UNBIND: DOIT SUIVRE ***
+ 
+*         UNBIND : Delie un bloc de controle
+*         A3 <- adresse de retour
+*         ne doit pas detruire A1 et A2
+*
+ 
+*                                       **** s'il faut faire un RETURN final
+UNBIND    EQU       *
+          MOV       #POPJ,A3            adresse d'un RETURN
+*                                       **** si A3 est pret
+UNBINP    EQU       *
+          POP       A4                  le type du bloc
+ 
+          JUMPX     TUNBD1,A4           aiguillage sur le type du bloc
+*
+ 
+TUNBD1    ADR       UNBDL                  * type bloc 0 : bloc LAMBDA
+          ADR       UNBDW                  * type bloc 1 : bloc LABEL
+          ADR       UNBDF                  * type bloc 2 : bloc TAG
+          ADR       UNBDS                  * type bloc 3 : bloc STEPEVAL
+          ADR       UNBDB                  * type bloc 4 : bloc BARRIER
+          ADR       UNBDU                  * type bloc 5 : bloc UNWIND-PROT
+ 
+*
+*         delie un bloc lambda
+*
+ 
+UNBDL     EQU       *
+          MOV       A3,SAVEA3           libere A3 (adr de retour)
+          POP       A4                  enleve l'ancienne FVAL
+          POP       A4                  1er nom ou markeur
+          BRA.S     UNBDL2              au travail
+UNBDL1    POP       A3                  ancienne valeur
+          MOV       A3,CVAL(A4)         force la nouvelle valeur
+          POP       A4                  depile encore (var ou mark)
+UNBDL2    BFEQ.S    A4,#MK_EVAL,UNBDL1  c'est une variable
+          POP       PBIND               restaure l'ancien pointeur
+          MOV       SAVEA3,A3           recupere l'adresse de retour
+          JUMPI     A3                  rentre direct.
+ 
+ 
+*
+*         delie un bloc  LABEL
+*         retourne dans A4 le nom de la fonction
+*
+ 
+UNBDW     EQU       *
+          MOV       A3,SAVEA3           libere A3 (adr ret)
+          POP       PBIND               repositionne PBIND
+          POP       A4                  enleve le nom de la fonction
+          POP       A3                  ancienne FVAL
+          MOV       A3,FVAL(A4)         on la restaure
+          POP       A3                  ancien FTYPE
+          SFTYPE    A3,A4               on le restaure aussi
+          MOV       SAVEA3,A3           recupere l'adresse de retour
+          JUMPI     A3                  on rentre dans A3
+ 
+*
+*         delie un bloc TAG/EVTAG ou un bloc BARRIER
+*         retourne dans A4 le nom de l'echappement
+*
+ 
+UNBDF     EQU       *
+UNBDB     EQU       *
+          POP       A4                  le nom de l'echappement
+          POP       PBIND               repositionne PBIND
+          JUMPI     A3                  retour via A3
+ 
+*
+*         delie un bloc STEPEVAL
+*
+ 
+UNBDS     EQU       *
+          POP       PBIND               restaure l'ancien PBIND
+          POP       EVALCH              restaure la CHRONOLOGIE
+          POP       EVALST              restaure l'ancien etat du STEP
+          JUMPI     A3                  on rentre dans A3
+ 
+ 
+*
+*         delie un bloc UNWIND-PROTECT
+*
+ 
+UNBDU     EQU       *
+          XTOPST    A1                  val de retour <-> corps du progn
+          PUSH      A2                  le registre de UNBIND a proteger
+          PUSH      A3                  sauve le registre de retour
+          CALL      PROGN               la valeur protegeante
+          POP       A3                  recupere l'adresse de retour
+          POP       A2                  recup le regitre de UNBIND a proteger
+          POP       A1                  la valeur de retour normale
+          POP       PBIND               l'ancien PBIND
+          JUMPI     A3                  on rentre dans A3
+ 
+ 
+*
+*         Evaluation des FEXPR et des MACROS
+*         ==================================
+*
+ 
+EVMAC     EQU       *
+          MOV       FORME,A1            l'argument est la forme elle-meme
+          POP       A4                  recupere la FVAL
+          PUSHAD    EVALA1              prepare la re-evaluation
+          BRA.S     EVFEXB              puis comme les FEXPRs
+ 
+ 
+*
+EVFEXP    EQU       *
+          POP       A4                  recupere la FVAL
+*                                       *** liaison de type SUBRF/MACRO
+EVFEXB    EQU       *
+*         lie le 1er arg de la FVAL (dans A4) avec la val A1
+          MOV       CAR(A4),A2          A2 <- la liste des variables
+          PUSH      PBIND               prepare le bloc de controle
+          PUSH      #MK_EVAL            marque la pile
+          BRA.S     EVFEX3              et on y va
+EVFEX2    MOV       CAR(A2),A3          A3 <- la variable suivante
+          PUSH      CVAL(A3)            sauve l'ancienne CVAL
+          MOV       A1,CVAL(A3)         force la nouvelle valeur
+          PUSH      A3                  sauve le nom de la variable
+          MOVNIL    A1                  A1 = NIL (val des autres var)
+          MOV       CDR(A2),A2          avance dans la liste des variables
+EVFEX3    BTCONS.S  A2,EVFEX2           il reste des variables
+          MOV       A4,A1               A1 <- la FVAL
+          BRA       EVEXPF              puis execute le corps (cf EXPR)
+ 
+ 
+ 
+*----------------------------------------------------------------------
+*
+*                   LOSING APPLY
+*
+*----------------------------------------------------------------------
+ 
+*
+*         (APPLY fn larg)   SUBR2
+*         (APPLYN fn a1 ... aN)   SUBRN
+*
+ 
+*----------------------------------------
+          FENTRY    APPLYN,SUBRN
+*----------------------------------------
+          MOV       CDR(A1),A2          A2 <- la liste des arguments
+          MOV       CAR(A1),A1          A1 <- la fonction
+          BRA.S     APPLY               puis c'est identique
+          NOP                           Ha ha ha, essayez de l'enlever!
+ 
+*----------------------------------------
+          FENTRY    APPLY,SUBR2
+*----------------------------------------
+          MOV       A1,A4               en cas d'erreur
+          BFSYMB.S  A1,APPLYS           la fonction est speciale
+          PUSH      FVAL(A1)            empile la FVAL
+          GFTYPE    A1,A3               A3 <- le ftype code
+          MOV       A2,A1               A1 <- la liste des arguments
+*                                       APPLY INTERNAL
+APPLIN    EQU       *
+          JUMPX     TAPPLY,A3           branchement rapide indexe sur ftype
+ 
+*
+*         Table des branchements indirects indexes
+*         pour le LOSING APPLY
+*
+ 
+TAPPLY    ADR       UDFA                   * code 0  : pas de definition
+          ADR       POPJ                   * code 1  : SUBR a 0 argument
+          ADR       APPLY1                 * code 2  : SUBR a 1 argument
+          ADR       APPLY2                 * code 3  : SUBR a 2 arguments
+          ADR       APPLY3                 * code 4  : SUBR a 3 arguments
+          ADR       POPJ                   * code 5  : SUBR a N arguments
+          ADR       POPJ                   * code 6  : SUBRF
+          ADR       APPEXP                 * code 7  : EXPR
+          ADR       EVFEXP                 * code 8  : FEXPR
+          ADR       APPMAC                 * code 9  : MACRO
+          ADR       APPLY1                 * code 10 : SUBRV1
+          ADR       APPLY2                 * code 11 : SUBRV2
+          ADR       APPLY3                 * code 12 : SUBRV3
+          ADR       APPLYVN                * code 13 : SUBRVN
+ 
+*
+ 
+UDFA      POP          A3               nettoie la FVAL
+UDFA1     MOV       .APPLY,A2           nom de la fonction
+          BRA       ERRUDF              'fonction indefinie'
+ 
+ 
+*
+*         Evaluation des fonctions speciales
+*
+ 
+APPLYS    EQU       *
+          BTNUMB    A1,UDFA1            erreur si nombre
+          MOV       CAR(A1),A3          A2 <- fonction de la fonction
+          BTEQ.S    A3,.LAMBDA,APPLYL   c'est une lambda implicite
+          BTEQ.S    A3,.INTERNAL,APPLYI c'est une INTERNAL
+          PUSH      A2                  sauve la liste des arguments
+          CALL      EVALA1              c'est une fonction calculee
+          POP       A2                  recupere la liste des arguments
+          BRA       APPLY               et reappelle APPLY.
+ 
+*                                       *** c'est une lambda explicite
+APPLYL    EQU       *
+          PUSH      CDR(A1)             empile la FVAL
+          MOV       A2,A1               pour traiter comme une EXPR
+          BRA.S     APPEXP              et la c'est pareil.
+ 
+*                                       *** c'est une INTERNAL explicite
+APPLYI    EQU       *
+          MOV       CDR(A1),A1          A1 <- (FTYPE FVAL)
+          MOV       CAR(A1),A3          A3 <- FTYPE
+          MOV       CDR(A1),A1          A1 <- (FVAL)
+          PUSH      CAR(A1)             empile la FVAL
+          BRA       APPLIN              vers l'INTERNAL
+ 
+ 
+*
+*         Evaluation rapide de type SUBR
+*
+ 
+*                                       *** SUBR1 SUBRV1
+APPLY1    EQU       *
+          MOV       CAR(A1),A1          prepare le 1er argument
+          RETURN    *                   et on tombe sur la FVAL empilee
+ 
+*                                       *** SUBR2 SUBRV2
+APPLY2    EQU       *
+          MOV       CDR(A1),A2          A2 <- (reste des args)
+          MOV       CAR(A1),A1          A1 <- le 1er argument
+          MOV       CAR(A2),A2          A2 <- le 1er argument
+          RETURN    *                   et on tombe sur la  FVAL empilee
+ 
+*                                       *** SUBR3 SUBRV3
+APPLY3    EQU       *
+          MOV       CDR(A1),A2          A2 <- (reste des args)
+          MOV       CAR(A1),A1          A1 <- le 1er argument
+          MOV       CDR(A2),A3          A3 <- (reste des arguments)
+          MOV       CAR(A2),A2          A2 <- le 2eme argument
+          MOV       CAR(A3),A3          A3 <- le 3eme argument
+          RETURN    *                   et on tombe sur la FVAL empilee
+ 
+*                                       *** SUBRVN
+APPLYVN   POP       A3                  l'adresse de lancement
+          MOV       #0,A4               init NARG
+          BRA.S     APPLYVN2            on y va
+APPLYVN1  PUSH      CAR(A1)             empile l'argument
+          MOV       CDR(A1),A1          avance dans la liste argument
+          INCR      A4                  actualise NARG
+APPLYVN2  BTCONS    A1,APPLYVN1         il reste des arguments
+          JUMPI     A3                  lancement de la fonction
+ 
+ 
+*
+*         Application des EXPR
+*         A1 <- liste des valeurs
+*         FVAL empilee
+*
+ 
+APPEXP    EQU       *
+          POP       A2                  A2 <- la FVAL
+          PUSH      PBIND               fabrique le bloc de controle
+          PUSH      #MK_EVAL
+          MOV       CAR(A2),A3          A3 <- liste des variables
+          BRA.S     APPEX2              et on commence a bosser.
+APPEX1    EQU       *
+          MOV       CAR(A3),A4          A4 <- la variable suivante
+          PUSH      CVAL(A4)            empile l'ancienne valeur
+          PUSH      A3                  sauve toutes les variables
+          MOV       CAR(A1),A3          A3 <- la nouvelle valeur
+          MOV       CDR(A1),A1          avance dans les valeurs
+          MOV       A3,CVAL(A4)         force la nouvelle valeur
+          XTOPST    A4                  recupere la liste des valeurs
+          MOV       CDR(A4),A3          avance dans cette liste
+APPEX2    BTCONS.S  A3,APPEX1           il en reste
+          BTNIL.S   A3,APPEX3           c'est une vraie fin
+          PUSH      CVAL(A3)            empile l'ancienne valeur
+          PUSH      A3                  empile le nom
+          MOV       A1,CVAL(A3)         force la nouvelle valeur
+APPEX3    MOV       A2,A1               A1 <- la FVAL (pour EVEXP)
+          BRA       EVEXPF              on va evaluer le corps.
+ 
+ 
+*
+*         Application des MACROS He oui ca sert! (par ex dans Emacs)
+*         fabrique un pseudo-corps qui sera lie comme un corps normal.
+*
+ 
+APPMAC    EQU       *
+          CONS      A4,A1               A1 <- (fnt . larg) donc un CORPS!
+          POP       A4                  A4 <- fval
+          PUSHAD    EVALA1              pour la re-evaluation
+          BRA       EVFEXB              on expanse.
+ 

@@ -1,0 +1,16 @@
+pour demo
+
+ramene "demopol demopol
+
+ramene "demospir demospir
+
+ramene "pays
+
+relie "v 1
+
+repete 4 [te cache echelle :v pays relie "v :v + 1 repete 2500 []]
+
+fin
+
+ 
+

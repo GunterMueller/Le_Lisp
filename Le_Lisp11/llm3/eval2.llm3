@@ -1,0 +1,606 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :  l'evaluateur (2eme partie)
+*
+****************************************************************
+*
+*                Jerome CHAILLOUX  (Chailloux.Vlsi)
+*                           I.N.R.I.A.
+*                Domaine de Voluceau,  Rocquencourt
+*                B.P. 105,   78153 Le Chesnay Cedex
+*                tel : (1) 954 90 20      poste 456
+*
+*****************************************************************
+ 
+ 
+          PURE
+ 
+ 
+*----------------------------------------------------------------------
+*
+*                   Les macros LETs
+*
+*
+*         LET autre forme d'une lambda macro-genere la MACRO
+*                   (LET () e1 ... eN)
+*                   (LET ((var val) ... (var val)) e1 ... eN)
+*
+*----------------------------------------------------------------------
+ 
+*----------------------------------------
+          FENTRY    LET,SUBRF
+*----------------------------------------
+          PUSH      CDR(A1)             sauve le corps
+          MOV       CAR(A1),A1          A1 <- (var val) ou l'autre forme
+          MOVNIL    A2
+          NCONS     A2                  A2 <- (NIL NIL)
+          PUSH      A2                  sauve la liste des variables
+          MOVNIL    A3
+          NCONS     A3                  A3 <- (NIL NIL)
+          PUSH      A3                  sauve la liste des valeurs
+LET2      BTNIL.S   A1,LET8             il n'y a plus de variables
+          MOV       CAR(A1),A4          A4 <- le couple suivant
+          PUSH      CDR(A1)             sauve le reste des couples
+          MOV       CAR(A4),A1          A1 <- var
+          NCONS     A1                  A1 <- (var)
+          MOV       A1,CDR(A2)          fabrique la lite des variables
+          MOV       A1,A2               nouvelle fin de liste
+          MOV       CDR(A4),A4          A4 <- (val)
+          MOV       CAR(A4),A1          A1 <- val
+          NCONS     A1                  A1 <- (val) un nouveau cons!
+          MOV       A1,CDR(A3)          fabrique la liste des valeurs
+          MOV       A1,A3               nouvelle fin de liste
+          POP       A1                  le reste des couples
+          BRA       LET2
+LET8      POP       A3                  A3 <- (NIL . lval)
+          MOV       CDR(A3),A3          A3 <- (lval)
+          POP       A2                  A2 <- (NIL . lvar)
+          MOV       CDR(A2),A2          A2 <- (lvar)
+          POP       A4                  A4 <- (corps)
+          XCONS     A4,A2               A2 <- ((lvar) . corps)
+          CONS      .LAMBDA,A2          A2 <- (LAMBDA (lvar) . corps)
+          MOV       FORME,A1            pour le DISPLACE final
+          MOV       A2,CAR(A1)
+          MOV       A3,CDR(A1)          DISPLACE!
+          BRA       EVALA1              devient une LAMBDA explicite.
+ 
+*
+*         (LETSEQ ((var1 val1) ...   FSUBR
+*         idem a LET mais liaison sequentielle!
+*         il est donc possible de fabriquer le bloc tout de suite
+*         ?!?!?!?!?! a faire ?!?!?!?!
+*
+*----------------------------------------
+          FENTRY    LETSEQ,SUBRF
+*----------------------------------------
+          RETURN    *                   ?!?!?!?!?
+ 
+ 
+*
+*         (LETV lvar lval . corps)   FSUBR
+*         (APPLY `(LAMBDA ,lvar . corps) lval)
+*
+*----------------------------------------
+          FENTRY    LETV,SUBRF
+*----------------------------------------
+          PUSH      CDR(A1)             sauve (lval . corps)
+          CALL      EVALCAR             A1 <- la valeur de lvar
+          XTOPST    A1                  A1 <- (lval . corps)
+          PUSH      CDR(A1)             sauve (corps)
+          CALL      EVALCAR             A1 <- la valeur de lval
+          POP       A2                  A2 <- corps
+          POP       A3                  A3 <- lvar
+          CONS      A3,A2               A2 <- (lvar . corps)
+          PUSH      A2                  pour APPEXP
+*                                       on APPLY une EXPR
+          BRA       APPEXP              c'est super rapide!
+ 
+ 
+*----------------------------------------------------------------------
+*
+*         Fonction de definition dynamique LABEL/FLET
+*
+*
+*         fabriquent un bloc de controle de la forme :
+*
+*                              [      UNBIND:       ]
+*              PBIND  ->       [         1          ]
+*                              [    ancien PBIND    ]
+*                              [ nom de la fonction ]
+*                              [   ancienne F-VAL   ]
+*                              [    ancien F-TYP    ]
+*                              ----------------------
+*
+*----------------------------------------------------------------------
+ 
+*----------------------------------------
+          FENTRY    FLET,SUBRF
+*----------------------------------------
+          MOV       CAR(A1),A3          A3 <- (var fval)
+          MOV       CDR(A1),A1          A1 <- le corps
+          MOV       CAR(A3),A2          A2 <- le nom
+          MOV       CDR(A3),A3          A3 <- (fval)
+          MOV       #EXPR,A4            A4 <- le FTYPE
+ 
+*                                       *** Liaison dynamique avec :
+FBIND     EQU       *
+*                                       *    A1 <- le corps a executer
+*                                       *    A2 <- le nom de la fonction
+*                                       *    A3 <- la nouvelle F-val
+*                                       *    A4 <- le nouvel F-typ
+ 
+          PUSH      A3                  pour travailler
+          GFTYPE    A2,A3               pret a etre sauve
+          XTOPST    A3                  donc == PUSH FTYPE(A2)
+          PUSH      FVAL(A2)            sauve l'ancienne FVAL
+          PUSH      A2                  sauve le nom de la fonction
+          SFTYPE    A4,A2               force le nouveau FTYPE
+          MOV       A3,FVAL(A2)         force la nouvelle FVAL
+          PUSH      PBIND               sauve l'adresse du bloc precedent
+          PUSH      #1                  type du bloc
+          STACK     PBIND               sauve l'adresse du bloc
+          PUSHAD    UNBIND              prepare le retour
+          BRA       PROGN               et evalue le corps
+ 
+*----------------------------------------------------------------------
+*
+*         Les echappements  : TAG/EVTAG/EXIT/EVEXIT
+*
+*         Utilisent un bloc de controle de type 2 : TAG
+*
+*                             [        UNBIND :      ]
+*              PBIND ->       [           2          ]
+*                             [ nom de l'echappement ]
+*                             [     ancien PBIND     ]
+*                             ------------------------
+*----------------------------------------------------------------------
+ 
+*----------------------------------------
+          FENTRY    TAG,SUBRF
+*----------------------------------------
+          PUSH      PBIND               sauve l'ancien PBIND
+          PUSH      CAR(A1)             sauve le nom de l'echappement
+TAG3      PUSH      #2                  type du bloc = TAG
+          STACK     PBIND               actualise le pointeur bloc
+          BRA       EVEXPG              vers l'execution du corps.
+ 
+ 
+*----------------------------------------
+          FENTRY    EVTAG,SUBRF
+*----------------------------------------
+          PUSH      A1                  sauve le tout
+          CALL      EVALCAR             evalue le nom du TAG
+          BFSYMB.S  A1,EVTAGERR         il faut absolument un atome litteral
+          MOV       A1,A2               sauve le nom
+          POP       A1                  recupere tout le corps
+          PUSH      PBIND               prepare le block de controle (cf: sup)
+          PUSH      A2                  sauve le nom de l'ehappement
+          BRA       TAG3                apres c'est pareil
+EVTAGERR  POP       A2                  nettoie la pile
+          MOV       .EVTAG,A2           nom de la fonction
+          BRA       ERRNAA              il fallait un atome litteral!
+ 
+ 
+*----------------------------------------
+          FENTRY    EVEXIT,SUBRF
+*----------------------------------------
+          PUSH      CDR(A1)             sauve le corps valeur,
+          CALL      EVALCAR             evalue le nom de l'echappement
+          XTOPST    A1                  A1 <- la valeur
+          BRA.S     EXIT1               apres c'est comme EXIT
+ 
+ 
+*----------------------------------------
+          FENTRY    EXIT,SUBRF
+*----------------------------------------
+          PUSH      CAR(A1)             sauve le nom de l'echappement
+          MOV       CDR(A1),A1          le corps a executer
+EXIT1     CALL      PROGN               evalue le corps du TAG
+          POP       A2                  recupere le nom du TAG
+*                                       FINDTAG doit suivre ...
+ 
+*
+*         FINDTAG   retourne la valeur A1 pour l'echappement A2
+*                   (utilise aussi pour les fonctions compilees)
+*
+FINDTAG   EQU       *
+EVESC1    MOV       PBIND,A4            pour le test,
+          BTNIL.S   A4,ERESC            il n'y a plus de bloc ?!?!
+          SSTACK    PBIND               sinon pile en debut de bloc
+          TOPST     A3                  recupere le sommet de pile
+          BTEQ.S    A3,#2,EVESC3        c'est un bloc ESCAPE
+          BTEQ.S    A3,#4,EVESC4        c'est un bloc CATCH-ALL-BUT
+          MOV       #EVESC1,A3          adresse de retour de UNBIND
+          BRA       UNBINP              et on delie ce bloc non escape
+EVESC3    POP       A3                  saute le type du bloc
+          POP       A3                  nom de l'echappement
+          POP       PBIND               adresse du bloc suivant
+          BFEQ.S    A2,A3,EVESC1        c'etait pas celui-la
+          RETURN    *                   c'etait le bon.
+EVESC4    POP       A3                  saute le type du bloc
+          POP       A3                  nom du CATCH-ALL-BUT
+          POP       PBIND               adresse du bloc suivant
+          BTEQ.S    A2,A3,EVESC1        je peux passer au travers : bravo!
+*                                       **** Erreur dans un EXIT
+ERESC     EQU       *
+          MOV       A2,A1               argument defectueux
+          MOV       .EXIT,A2            la fonction qui merde
+          BRA       ERRUDT              'undefined tag'
+ 
+*----------------------------------------------------------------------
+*
+*         Les non-echappements : CATCH-ALL-BUT
+*
+*
+*         Utilisent un bloc de controle de type 4 : CATCH-ALL-BUT
+*
+*                             [        UNBIND :      ]
+*              PBIND ->       [           4          ]
+*                             [ nom de l'echappement ]
+*                             [     ancien PBIND     ]
+*                             ------------------------
+*----------------------------------------------------------------------
+ 
+*----------------------------------------
+          FENTRY    BARRIER,SUBRF
+*----------------------------------------
+          PUSH      PBIND               sauve l'ancien PBIND
+          PUSH      CAR(A1)             sauve le nom de la barriere
+          PUSH      #4                  type du bloc = BARRIER
+          STACK     PBIND               actualise le pointeur bloc
+          BRA       EVEXPG              vers l'execution du corps.
+ 
+*----------------------------------------------------------------------
+*
+*         Les protections des UNBIND
+*
+*         Utilisent un bloc de controle de type 5 : UNWIND-PROTECT
+*
+*                             [        UNBIND :      ]
+*              PBIND ->       [           5          ]
+*                             [ progn de la deliaison]
+*                             [     ancien PBIND     ]
+*                             ------------------------
+*----------------------------------------------------------------------
+ 
+*----------------------------------------
+          FENTRY    PROTECT,SUBRF
+*----------------------------------------
+          PUSH      PBIND               sauve l'ancien PBIND
+          PUSH      CDR(A1)             sauve le progn de la deliaison
+          PUSH      #5                  type du bloc = PROTECT
+          STACK     PBIND               actualise le pointeur bloc
+          PUSHAD    UNBIND              adresse de la routine de deliaison
+          BRA       EVALCAR             puis comme un prog1
+ 
+*----------------------------------------------------------------------
+*
+*         Lancement d'une IT soft : ITSOFT
+*         ---------------------------------
+*
+*         Fabrique un bloc de controle de type 3 : ITSOFT
+*
+*                             [      UNBIND      ]
+*             PBIND  ->       [         3        ]
+*                             [       PBIND      ]
+*                             [ chrono courante  ]
+*                             [   etat courant   ]
+*
+*         A1 <- la fonction
+*         A2 <- la liste d'arguments (a la APPLY)
+*         change de CHRONOLOGIE  +1
+*
+*----------------------------------------------------------------------
+ 
+ITSOFT    EQU       *
+*                                       prepare un bloc 3
+          PUSH      EVALST              sauve l'etat de la trace courante
+          PUSH      EVALCH              sauve la chrono courante
+          PUSH      PBIND               sauve l'ancien PBIND
+          PUSH      #3                  type du bloc = 3
+          STACK     PBIND               nouveau PBIND
+          MOVNIL    EVALST              passe en mode non-trace
+*          INCR      EVLCH               change de chrono ?!?!
+          PUSHAD    UNBIND              prepare le deliement du bloc
+          BRA       APPLY               et appel de APPLY
+ 
+ 
+*-----------------------------------------------------------------
+*
+*         Pour le compilateur : des points d'entree speciaux
+*
+*-----------------------------------------------------------------
+ 
+ 
+*         CBIND0 :  A4 <- (at)
+ 
+CBIND0    EQU       *
+          POP       A2                  A2 <- adresse de retour de :CBIND0
+          PUSH      PBIND               fabrique un bloc vide
+          PUSH      #MK_EVAL            marqueur de fin des couples
+          PUSH      CAR(A4)             le nom de la fonction
+          PUSH      #0                  type du bloc = LAMBDA
+          STACK     PBIND               actualise le dernier bloc
+          PUSHAD    UNBIND              prepare la deliaison du bloc
+          JUMPI     A2                  vers la fonction compilee
+ 
+*         CBIND1 : A4 <- (fnt na1)  A1 <- va1
+ 
+CBIND1    EQU       *
+          POP       A2                  A2 <- adresse de retour du CBIND1
+          PUSH      PBIND               le vieux PBIND en fond de bloc
+          PUSH      #MK_EVAL            le marqueur de fin de couples
+          MOV       CAR(A4),A3          A3 <- le nom de la fonction
+          MOV       CDR(A4),A4          A4 <- (na1)
+          MOV       CAR(A4),A4          A4 <- na1
+          PUSH      CVAL(A4)            sauve l'ancienne CVAL
+          PUSH      A4                  sauve le nom de la variable
+          MOV       A1,CVAL(A4)         nouvelle CVAL
+          PUSH      A3                  nom de la fnt == fval (si compilee)
+          PUSH      #0                  type du bloc = lambda
+          STACK     PBIND               actualise le dernier bloc
+          PUSHAD    UNBIND              prepare le retour de la fonction
+          JUMPI     A2                  vers la fonction compilee
+ 
+*         CBIND2 : A4 <- (fnt na1 na2)  A1 <- va1  A2 <- na2
+*         ?!?!?!?!? c'est vraiment pas tres jouasse now ?!?!?!?!?!?
+ 
+CBIND2    EQU       *
+          POP       SAVEP               A2 <- adresse de retour du CBIND2
+          PUSH      PBIND               le vieux PBIND en fond de bloc
+          PUSH      #MK_EVAL            le marqueur de fin de couples
+          MOV       CAR(A4),FUNCT       FUNCT <- le nom de la fonction
+          MOV       CDR(A4),A4          A4 <- (na1 na2)
+          MOV       CAR(A4),A3          A3 <- na1
+          PUSH      CVAL(A3)            sauve l'ancienne CVAL
+          PUSH      A3                  sauve le nom de la variable
+          MOV       A1,CVAL(A3)         nouvelle CVAL
+          MOV       CDR(A4),A4          A4 <- (na2)
+          MOV       CAR(A4),A3          A3 <- na2
+          PUSH      CVAL(A3)            sauve l'ancienne CVAL
+          PUSH      A3                  sauve le nom de la variable
+          MOV       A2,CVAL(A3)         nouvelle CVAL
+          PUSH      FUNCT               nom de la fnt == fval (si compilee)
+          PUSH      #0                  type du bloc = lambda
+          STACK     PBIND               actualise le dernier bloc
+          PUSHAD    UNBIND              prepare le retour de la fonction
+          MOV       SAVEP,A4            adresse de retour
+          JUMPI     A4                  vers la fonction compilee
+ 
+*         CBINDN : A4 <- (fnt na1 ... naN)  A1 <- (va1 ... vaN)
+ 
+CBINDN    EQU       *
+          POP       SAVEP               A2 <- adresse de retour du CBINDN
+          PUSH      PBIND               le vieux PBIND en fond de bloc
+          PUSH      #MK_EVAL            le marqueur de fin de couples
+          MOV       CAR(A4),FUNCT       FUNCT <- le nom de la fonction
+          BRA.S     CBINDN2
+CBINDN1   MOV       CAR(A4),A3          A3 <- nai
+          PUSH      CVAL(A3)            sauve l'ancienne CVAL
+          PUSH      A3                  sauve le nom de la variable
+          MOV       CAR(A1),CVAL(A3)    nouvelle CVAL
+          MOV       CDR(A1),A1          avance dans les valeurs
+CBINDN2   MOV       CDR(A4),A4          A4 <- (na2 ... naN)
+          BTCONS    A4,CBINDN1          il en reste
+          PUSH      FUNCT               nom de la fnt == fval (si compilee)
+          PUSH      #0                  type du bloc = lambda
+          STACK     PBIND               actualise le dernier bloc
+          PUSHAD    UNBIND              prepare le retour de la fonction
+          MOV       SAVEP,A4            adresse de retour
+          JUMPI     A4                  vers la fonction compilee
+ 
+*         CBINDE : appel d'une EXPR (au moyen d'un CALL $CBINDE)
+*         on suppose empilee nom/mark/ ..../adr ret
+*         le code est similaire a EVEXP3
+ 
+CBINDE    EQU       *
+          POP       A4                  recupere l'adresse de lancement
+          MOV       A4,FUNCT            histoire de la sauver.
+          STACK     A4                  A4 devient le SP de travail !
+          BRA.S     CBINDE3             et au boulot.
+CBINDE2   MOV       CVAL(A2),A1         recupere l'ancienne C-VAL
+          XTOPST    A1,A4               qui est sauvee en pile
+          MOV       A1,CVAL(A2)         effectue la nouvelle liaison
+          POP       A1,A4               saute la valeur
+CBINDE3   POP       A2,A4               lecture de la nouvelle variable
+          BFEQ.S    A2,#MK_EVAL,CBINDE2 il y en a encore
+          MOV       PBIND,A1            pour le XTOPST suivant
+          XTOPST    A1,A4               force PBIND et recupere la FVAL
+*                                       Test de recursion terminale
+          POP       A2,A4               saute le PBIND
+          MOV       A4,A3               en cas de tail-rec devient sommet pile
+          POP       A2,A4               le sommet de pile
+          BFEQ.S    A2,#UNBIND,CBINDE8  ce n'est pas terminal.
+          POP       A2,A4               le type du bloc
+          BFEQ.S    A2,#0,CBINDE8       ce n'est pas un bloc lambda
+          POP       A2,A4               la Fval associee
+          BFEQ.S    A2,A1,CBINDE8       ce n'est pas recursif.
+*                                       C'est donc tail-rec !
+          SSTACK    A3                  tete du precedent bloc
+          MOV       CDR(A1),A1          A1 <- le corps
+          MOV       FUNCT,A4            recupere l'adresse de lancement
+          JUMPI     A4                  et on y va!
+*                                       C'est donc un corps normal
+CBINDE8   EQU       *
+          PUSH      A1                  empile la Fval a evaluer
+          PUSH      #0                  empile le code du bloc
+          STACK     PBIND               sauve le pointeur de pile
+          PUSHAD    UNBIND              prepare la deliaison
+          MOV       FUNCT,A4            recupere l'adresse de lancement
+          JUMPI     A4                  et on y va.
+ 
+*         CTAG : A1 <- le nom du tag
+ 
+CTAG      EQU       *
+          POP       A2                  adresse de retour de CTAG
+          PUSH      PBIND               fabrique un bloc de controle
+          PUSH      A1                     le nom du TAG
+          PUSH      #2                     de type 2
+          STACK     PBIND               nouveau PBIND
+          PUSHAD    UNBIND              prepare le retour
+          JUMPI     A2                  vers le corps compile
+ 
+*         CEXIT : A1 <- la valeur, A2 <- le nom du TAG
+ 
+CEXIT     EQU       FINDTAG
+ 
+ 
+*----------------------------------------------------------------------
+*
+*          Autres fonctions interprete
+*
+*----------------------------------------------------------------------
+ 
+*
+*         (QUOTE s)   SUBRF *
+*         identique a CAR (mais sans test)
+*
+*----------------------------------------
+          FENTRY    QUOTE,SUBRF
+*----------------------------------------
+          MOV       CAR(A1),A1
+          RETURN
+ 
+*
+*         (FUNCTION s)  SUBRF
+*         identique a QUOTE (pauvre Maclisp)
+*
+*----------------------------------------
+          FENTRY    FUNCTION,SUBRF
+*----------------------------------------
+          MOV       CAR(A1),A1
+          RETURN
+ 
+*
+*         (LAMBDA svar e1 ... eN)   SUBRF
+*         (LAMBDA-NAMED name svar e1 ... eN)   SUBRF
+*         (INTERNAL f-type f-val)   SUBRF
+*         ramenent la forme elle-meme
+*
+ 
+*----------------------------------------
+          FENTRY    LAMBDA,SUBRF
+*----------------------------------------
+*         Pas ca a cause du compilateur (pas de forme)
+*         MOV       FORME,A1
+          CONS     .LAMBDA,A1
+          RETURN
+ 
+*----------------------------------------
+          FENTRY    NLAMBDA,SUBRF
+*----------------------------------------
+*         idem a LAMBDA
+*         MOV       FORME,A1
+          CONS      .NLAMBDA,A1
+          RETURN
+ 
+*----------------------------------------
+          FENTRY    INTERNAL,SUBRF
+*----------------------------------------
+*         idem a LAMBDA
+*         MOV       FORME,A1
+          CONS      .INTERNAL,A1
+          RETURN
+ 
+*
+*         (COMMENT  ... )
+*
+*----------------------------------------
+          FENTRY    COMMENT,SUBRF
+*----------------------------------------
+          MOV       .COMMENT,A1         retourne l'atome COMMENT
+          RETURN
+ 
+*
+*         (DECLARE ...)
+*         identique a COMMENT : pauvre Maclisp
+*
+*----------------------------------------
+          FENTRY    DECLARE,SUBRF
+*----------------------------------------
+          MOV       .DECLARE,A1         retourne toujour DECLARE
+          RETURN
+ 
+*
+*         (IDENTITY s)  la fonction identite
+*
+*----------------------------------------
+          FENTRY    ID,SUBR1
+*----------------------------------------
+          RETURN    *                   car c'est une SUBR1
+ 
+ 
+*
+*         (PROGN e1 ... eN)   SUBRF
+*         (EPROGN l)   SUBR1
+*         Permet de traiter les fonctions tail-recursives
+*
+ 
+PROGNA3   MOV       A3,A1               fonction (PROGN A3) interne
+          BRA.S     PROGN               et c'est pareil
+ 
+*----------------------------------------
+          FENTRY    EPROGN,SUBR1        version SUBR1 du PROGN
+*----------------------------------------
+          BRA.S     PROGN
+          NOP                           Wouha!
+ 
+*----------------------------------------
+          FENTRY    PROGN,SUBRF
+*----------------------------------------
+          BRA.S     PROGN2              au travail.
+PROGN1    PUSH      A2                  sauve le reste
+          CALL      EVALCAR             evalue l'element
+          POP       A1
+PROGN2    MOV       CDR(A1),A2          le reste
+          BTCONS    A2,PROGN1           il en reste au - 2
+          BRA       EVALCAR             JUMP pour le dernier element
+ 
+ 
+*
+*         (PROG1 e1 ... eN)   SUBRF
+*         evalue une liste et retourne la 1ere valeur
+*
+ 
+*----------------------------------------
+          FENTRY    PROG1,SUBRF
+*----------------------------------------
+          PUSH      CDR(A1)             sauve le reste des elements
+          CALL      EVALCAR             evalue le 1er
+          XTOPST    A1                  val du 1er <-> le reste
+          CALL      PROGN               evalue tous les autres
+          POP       A1                  valeur de retour
+          RETURN    *                   et voila
+ 
+ 
+*
+*         (PROG2 e1 e2 ... eN)   SUBRF
+*         retourne la 2eme valeur (a la Maclisp)
+*
+ 
+*----------------------------------------
+          FENTRY    PROG2,SUBRF
+*----------------------------------------
+          PUSH      CDR(A1)             sauve le reste
+          CALL      EVALCAR             evalue le 1er element
+          POP       A1                  puis c'est comme
+          BRA       PROG1               avant.
+ 
+ 
+*
+*         (LIST e1 ... eN)   SUBRVN
+*
+*----------------------------------------
+          FENTRY    LIST,SUBRVN
+*----------------------------------------
+          MOVNIL    A1                  la valeur de retour
+          BRA.S     LISTS2              au travail
+LISTS1    POP       A2                  argument suivant
+          CONS      A2,A1               fabrique ce qu'il faut
+LISTS2    SOBGEZ    A4,LISTS1           pour tous
+          RETURN    *                   tout est dit
+ 
+ 
+          END
+ 
+ 

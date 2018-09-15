@@ -1,0 +1,929 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :  les fonctions d'entree
+*
+****************************************************************
+*
+*                Jerome CHAILLOUX  (Chailloux.Vlsi)
+*                           I.N.R.I.A.
+*                Domaine de Voluceau,  Rocquencourt
+*                B.P. 105,   78153 Le Chesnay Cedex
+*                tel : (1) 954 90 20      poste 456
+*
+*****************************************************************
+ 
+ 
+          TITRE     READ       LLM3 : les entrees logiques.
+ 
+          XREF      BUILDAT,CSYMB                 pour MAKFNT
+          XREF      .UNDEF,.T,.QUOTE,.FCONS,.MCONS,.LIST
+          XREF      GC                            pour CONS
+ 
+          XREF      TRYATOM,CRASTRG,GETPNAM
+          XREF      ERRNLA,ERRNNA,ERRNCA,ERRSXT
+          XREF      NREVERSE
+          XREF      EVALA1,APPLY,DE
+          XREF      INPHY,ISTREAM
+ 
+          XDEF      INI_READ            pour l'initialiseur
+          XDEF      .DMC                pour le pretty-printer
+          XDEF      .CTRLZ              indic EOF
+          XDEF      U_READ              pour toplevel
+          XDEF      IREAD               pour LIBRARY
+          XDEF      .VOID               pour tout le monde (Package Cell)
+          XDEF      CPKGC               current package cell
+ 
+ 
+          IMPURE
+ 
+ 
+TABCH     DSBYTE      128     table des caracteres
+ 
+RINGUR    ADR         0       caractere a re-ingurgiter
+RDPRD     ADR         0       profondeur du READ (cf: pretty-read)
+*
+IMPLI     ADR         0       =0 si READ, <>0 si IMPLODE
+IMPLD     ADR         0       liste des caracteres de IMPLODE
+*
+MAXAT     EQU         64      taille maxi d'un atome en entree
+BUFAT     DSADR       MAXAT   tampon d'un nom d'un atome en entree
+*
+CPKGC     ADR       0         current package cell.
+ 
+ 
+          PURE
+ 
+*
+*         Initialise le lecteur
+*         =====================
+*
+ 
+INI_READ  EQU       *
+ 
+          MOVNIL    RINGUR              rien a relire
+          MOVNIL    IMPLI               pas dans IMPLODE
+ 
+*                                       Creation des symboles
+          NOLIST
+          MAKVOID   VOID,0                        le symbole ||
+          MAKFNTS   CQUOTE,0,.VOID,1,$27          le quote
+          MAKFNT    CARROB,0,.VOID,1,'@'                le AT-sign
+          MAKCSTS   CTRLZ,0,.VOID,1,$1A           ctrl-Z (EOF)
+          MAKCST    STATRC,0,.VOID,16,'STATUS-READ-CASE'
+          MAKFNT    DMC,0,.VOID,3,'DMC'
+          MAKFNT    LREAD,0,.VOID,4,'READ'
+          MAKFNT    IMPLODE,0,.VOID,7,'IMPLODE'
+          MAKFNT    READCH,0,.VOID,6,'READCH'
+          MAKFNT    READCOD,0,.VOID,6,'READCN'
+          MAKFNT    REREAD,0,.VOID,6,'REREAD'
+          MAKFNT    READLINE,0,.VOID,8,'READLINE'
+          MAKFNT    PEEKCH,0,.VOID,6,'PEEKCH'
+          MAKFNT    PEEKCN,0,.VOID,6,'PEEKCN'
+          MAKFNT    FASCII,0,.VOID,5,'ASCII'
+          MAKFNT    CASCII,0,.VOID,6,'CASCII'
+          MAKFNT    UPPERCASE,0,.VOID,9,'UPPERCASE'
+          MAKFNT    LOWERCASE,0,.VOID,9,'LOWERCASE'
+          MAKFNT    DIGITP,0,.VOID,6,'DIGITP'
+          MAKFNT    TYPECH,0,.VOID,6,'TYPECH'
+          MAKFNT    TYPECOD,0,.VOID,6,'TYPECN'
+          MAKCST    SHRPM,0,.VOID,11,'SHARP-MACRO'
+*
+          MOV       #127,A1
+REINI     XMOVB     A1,TABCHINI,A2
+          MOVBX     A2,TABCH,A1
+          SOBGEZ    A1,REINI
+ 
+          MOV       .STATRC,A1          adresse su symbole status
+          MOVNIL    CVAL(A1)            = NIL.
+ 
+          MOV       .VOID,CPKGC         current package = .VOID
+ 
+FALSE     MOVNIL    A1
+POPJ      RETURN
+ 
+*
+*         Les points d'entree normaux du READ
+*         ===================================
+*
+ 
+U_READ    EQU       *                   teste le EOF
+          CALL.S    IREAD
+          BFEQ.S    A1,.CTRLZ,U_READ9   ce n'est pas un EOF
+          MOVNIL    ISTREAM             repasse en mode terminal
+U_READ9   RETURN    *                   et c'est tout maintenant.
+ 
+IREAD     EQU       *                   ne teste pas le EOF
+          CALL      RD1                 1ere us.
+          BTEQ      A3,#1,U_READ        on saute toutes les ')'
+          BRA       READ0               puis READ normal (1er us lue)
+ 
+ 
+ 
+*
+*         Acces au caractere logique
+*         ==========================
+*
+ 
+*
+*          GETCH : lit le caractere suivant ou celui a reingurgiter
+*                  dans le flux d'entree courant
+*                  retourne A4 _ le caractere
+*                           A3 _ le type du caractere (type-ch)
+*                       type-ch = 0 :   caracteres null (a ignorer)
+*                       type-ch = 1 :   debut de commentaires
+*                       type-ch = 2 :   fin de commentaires
+*                       type-ch = 3 :   quote caractere
+*                       type-ch = 4 :   debut de liste
+*                       type-ch = 5 :   fin de liste
+*                       type-ch = 6 :   debut de liste crochee
+*                       type-ch = 7 :   fin de liste crochee
+*                       type-ch = 8 :   point
+*                       type-ch = 9 :   separateur nul
+*                       type-ch = 10 :  macro-caractere
+*                       type-ch = 11 :  delimiteur de chaine de caracteres
+*                       type-ch = 12 :  caractere normal
+*                       type-ch = 13 :  delimiteur de pname speciaux
+*                       type-ch = 14 :  symbole mono-caractere
+*                       type-ch = 15 :  specificateur de SHARP-MACRO
+*
+ 
+ 
+GETCH     EQU       *
+          BTNIL.S   RINGUR,GETCH1       rien a relire
+          MOV       RINGUR,A4           recupere le caractere
+          BTNUMB.S  A4,GETCH0           c'est un nb (un code ASCII)
+          MOV       CDR(A4),RINGUR      sauve le reste de la liste
+          MOV       CAR(A4),A4          A4 <- le caractere suivant
+          BRA.S     GETCH2              recup le chtype
+GETCH0    MOVNIL    RINGUR              efface le car
+          BRA.S     GETCH2              recup le chtype
+GETCH1    BFNIL.S   IMPLI,GETCH3        si on se trouve dans IMPLODE
+          CALL      INPHY               sinon lecture physique
+*                                       recherche du type
+GETCH2    XMOVB     A4,TABCH,A3         A3 <- le type du caractere
+*!!!      SNAP      6,<'GETCH2'>,'A4'
+*!!!      SNAP      6,<'GETCH2'>,'A3'
+          RETURN    *                   et voila
+*                                       si dans IMPLODE
+GETCH3    MOV       IMPLD,A4            recup la liste du implode
+          BTNIL.S   A4,GETCH4           elle est vide!
+          BFCONS    A4,ERLEC1           c'est une erreur
+          MOV       CDR(A4),IMPLD       sauve le reste de la liste
+          MOV       CAR(A4),A4          A4 <- le caractere suivant
+          BFNUMB    A4,ERLEC9           erreur IMPLODE No 9!
+          BRA.S     GETCH2              vers la rech du type
+GETCH4    MOV       #0,IMPLD            marque la liste finie
+          MOV       #32,A4              espace = sep normal!
+          BRA.S     GETCH2              vers la rech du type
+ 
+ 
+*
+*         Acces au caractere logique valide
+*         =================================
+*
+*
+*          GETCV : retourne dans A4 le caractere LISP valide suivant
+*                  traite les commentaires et les caracteres quotes
+*                  retourne dans A3 le type du car. valide (type-cv)
+*                       type-cv = 0  : (
+*                       type-cv = 1  : )
+*                       type-cv = 2  : [
+*                       type-cv = 3  : ]
+*                       type-cv = 4  : .
+*                       type-cv = 5  : separateur
+*                       type-cv = 6  : macro-caractere
+*                       type-cv = 7  : delimiteur de chaines
+*                       type-cv = 8  : caractere normal de p-name
+*                       type-cv = 9  : delimiteur de P-names speciaux
+*                       type-cv = 10 : symbole mono-caractere
+*                       type-cv = 11 : specificateur de SHARP-MACRO
+*
+ 
+GETCV1    CALL      GETCH               nouveau caractere
+*         BTEQ.S    A3,#1,GETCV         si nouveau deb de comm
+          BFEQ.S    A3,#2,GETCV1        si non fin de commentaires
+*                                       *** point d'entree
+GETCV     EQU       *
+          CALL      GETCH               lit un caractere
+          BTEQ.S    A3,#0,GETCV         saute tous les nulls
+          BFEQ.S    A3,#3,GETCV2        test quote caractere
+          CALL      GETCH               si oui : relit n'importe quoi
+          MOV       #8,A3               et retourne le type
+          RETURN    *                   normal
+*                                       *** caractere normaux
+GETCV2    BTEQ.S    A3,#1,GETCV1        si debut de comm
+          BTEQ.S    A3,#2,GETCV         si fin de comm
+          DIFF      #4,A3               retourne type - 4
+          PUSH      A1                  pour travailler
+          MOV       .STATRC,A1          adresse du symbole status
+          MOV       CVAL(A1),A1         A1 = STATUS-READ-CASE
+          BFNIL.S   A1,GETCV3           si ^= NIL, pas de conversion.
+          LWCASE    A4                  conversion lower -> upper case
+*!!!      SNAP      6,<'GETCV2'>,'A4'
+*!!!      SNAP      6,<'GETCV2'>,'A3'
+GETCV3    POP       A1                  restaure le registre de travail
+          RETURN
+ 
+ 
+*
+*         Acces a l'unite syntaxique suivante
+*         ===================================
+*
+*
+*          RD1 : lit l'unite syntaxique suivante
+*                retourne dans A3 son type :
+*                 type-us  = 0 :
+*                 type-us  = 1 :        )
+*                 type-us  = 2 :        [
+*                 type-us  = 3 :        ]
+*                 type-us  = 4 :        .
+*                 type-us  = 5 :    objet LISP
+*                   et A1 contient l'objet)
+*
+ XDEF RD1 
+RD1       EQU       *
+          CALL      GETCV               caractere suivant
+          JUMPX     RDTB1,A3            aiguillage sur le type du caractere
+*
+RDTB1     ADR       RDPARO              type-cv = 0 : (
+          ADR       RDPARF              type-cv = 1 : )
+          ADR       POPJ                type-cv = 2 : [
+          ADR       POPJ                type-cv = 3 : ]
+          ADR       POPJ                type-cv = 4 : .
+          ADR       RD1                 type-cv = 5 : separateur
+          ADR       RDMAC               type-cv = 6 : macrocaractere
+          ADR       RDSTR               type-cv = 7 : delimiteur de chaines
+          ADR       RD2                 type-cv = 8 : normal P-name
+          ADR       RD3                 type-cv = 9 : delim de p-names speciaux
+          ADR       RD4                 type-cv = 10 : symbole mono caractere
+          ADR       RDSH                type-cv = 11 : SHARP-MACRO
+ 
+*                                   *** traitement (
+RDPARO    EQU       *
+          INCR      RDPRD                comptage pretty-read
+          RETURN
+ 
+*                                   *** traitement )
+RDPARF    EQU       *
+          SOBGEZ    RDPRD,RDPARFRET     comptage pretty-read
+          MOV       #0,RDPRD            jamais negatif!
+RDPARFRET RETURN    *                   c'est tout
+ 
+*                                   *** traitement des macro-caracteres
+RDMAC     EQU       *
+          CALL      ASCIII              A1 <- le nom du symbole
+          MOVNIL    A2                  pas d'arg
+          CALL      APPLY               et appelle la fonction
+          MOV       #5,A3               type_us = objet LISP
+          RETURN
+ 
+*                                   *** traitement des chaines de car
+RDSTR     EQU       *
+          MOV       #0,A2               raz index dans BUFAT
+RDSTR1    CALL      GETCH               caractere simple suivant
+          BTEQ.S    A3,#11,RDSTR3       c'est la fin de la chaine
+RDSTR2    MOVBX     A4,BUFAT,A2         charge le caractere dans le buffer
+          INCR      A2                  avance le pointeur
+          CBLT.S    A2,#MAXAT*4,RDSTR1  plus de MAXAT*4 (eg 256) caracteres
+          MOV       #2,A1               numero de l'erreur lecture
+          BRA       ERLEC               et on y va.
+RDSTR3    CALL      GETCH               caractere simple suivant
+          BTEQ.S    A3,#11,RDSTR2       "" == "
+          MOV       A4,RINGUR           a ne pas perdre pour a suite du read
+RDSTR5    MAKSTRG   A2,BUFAT            interne l'atome dans BUFAT
+RDSTR6    MOV       #5,A3               type objet lisp
+          RETURN
+ 
+*                                   *** traitement atome normal
+RD2       EQU       *
+          MOV       #0,A2               init index sur BUFAT
+RD21      MOVBX     A4,BUFAT,A2         charge le nouveau caractere
+          INCR      A2                  avance dans l'index
+          CBGE      A2,#MAXAT,ERLEC3    ya trop de caracteres
+          CALL      GETCV               caractere valide suivant
+          BTEQ      A3,#8,RD21          type_cv = normal
+          BTEQ      A3,#4,RD21          type_cv = . (les . dedans sont OK)
+          MOV       A4,RINGUR           pour le relire
+          MOVNIL    A1                  prepare le resultat
+          INTERN    A2,BUFAT            interne l'atome dans BUFAT
+          MOV       #5,A3               type_us = objet LISP
+          RETURN
+ 
+*                                   *** traitement des pnames speciaux
+RD3       EQU       *
+          MOV       #0,A2               raz index dans BUFAT
+RD31      CALL      GETCH               caractere simple suivant
+          BTEQ.S    A3,#13,RD33         c'est la fin du pname
+RD32      MOVBX     A4,BUFAT,A2         charge le caractere dans le buffer
+          INCR      A2                  avance le pointeur
+          CBLT.S    A2,#MAXAT,RD31      plus de MAXAT (eg 30) caracteres
+          MOV       #9,A1               numero de l'erreur lecture
+          BRA       ERLEC               et on y va.
+RD33      CALL      GETCH               one maure time
+          BTEQ.S    A3,#13,RD32         la cas || = |
+          MOV       A4,RINGUR           a ne pas perdre ...
+          MOVNIL    A1                  prepare le resultat
+          CBEQ.S    A2,#0,RD35          il n'y a pas de car!!   || = void!
+          INTERN    A2,BUFAT            interne l'atome dans BUFAT
+RD34      MOV       #5,A3               type objet lisp
+          SSPTYPE   A1                  force le type symbole special
+          RETURN
+RD35      MOV       .VOID,A1            le symbole vide
+          BRA       RD34
+ 
+*                                   *** traitement des symboles mono caractere
+RD4       EQU       *
+          CALL      ASCIII              A1 <- l'atome de code A4
+          MOV       #5,A3               type objet lisp
+          RETURN
+ 
+*                                   *** traitement de la SHARP-MACRO
+RDSH      EQU       *
+          MOV       #10,A1              erreur 10 actuelement
+          BRA       ERLEC               ?!?!?!?!
+ 
+ 
+*
+*         Macro-caracteres standards
+*         ==========================
+*
+ 
+*----------------------------------------
+          FENTRY CQUOTE,SUBR0
+*----------------------------------------
+ 
+*         '<s> = (QUOTE <s>)
+ 
+          CALL.S    READI               lit l'expression <s>
+          NCONS     A1                  forme (<s>)
+          CONS      .QUOTE,A1           puis (QUOTE <s>)
+          RETURN
+ 
+*----------------------------------------
+          FENTRY CARROB,SUBR0
+*----------------------------------------
+ 
+*         @<s> = valeur de (EVAL <s>)
+ 
+          CALL.S    READI               lit l'expression <s>
+          BRA       EVALA1              et on l'evalue
+ 
+ 
+*
+*         Definition d'un macro-caractere
+*         ===============================
+*
+ 
+*----------------------------------------
+          FENTRY DMC,SUBRF
+*----------------------------------------
+          CALL      DE                  defini une fonction de meme nom
+          PUSH      A1                  sauve le caractere
+          MOV       #10,A2              type_ch = macrocaractere
+          CALL      TYPECH              et redefini le type du caractere
+          POP       A1                  recup le caractere (val ret)
+          RETURN
+ 
+ 
+*
+*         Acces a l'expression
+*         ====================
+*
+ 
+*
+*          READI : lecture interne
+*          retourne dans A1 l'expression lue suivante
+*
+ 
+READI     EQU       *
+          CALL      RD1                 us suivante
+READ0     EQU       *
+          JUMPX     READT1,A3           aiguillage sur le 1er type-us
+ 
+*
+READT1    ADR       READ2               type-us = 0 : (
+          ADR       ERLEC4              type-us = 1 : )
+          ADR       READ1               type-us = 2 : [
+          ADR       ERLEC4              type-us = 3 : ]
+          ADR       ERLEC4              type-us = 4 : .
+          ADR       POPJ                type-us = 5 : objet
+ 
+*          un [ a ete lu
+ 
+READ1     EQU       *
+          CALL      RD1                 us suivante
+          BTEQ      A3,#3,FALSE         c'est donc []  =>  NIL
+          MOVNIL    A2                  fabrique une tete de liste
+          CONS      #MK_READ,A2         forme (markREAD)
+          PUSH      A2                  sauve la tete de liste
+          PUSH      A2                  sauve la queue de liste
+          BRA.S     READ31              traite l'us
+ 
+*          une ( a ete lue
+ 
+READ2     EQU       *
+          CALL      RD1                 us suivante
+          BTEQ      A3,#1,FALSE         ()  =>  NIL
+          CALL      READ0               1er element
+          NCONS     A1                  fabrique le 1er doublet
+          PUSH      A1                  sauve le 1er doublet
+*                                       traite l'us suivante
+READ3     PUSH      A1                  sauve la queue de liste
+          CALL      RD1                 us suivante
+*                                       elle  est prete
+READ31    JUMPX     READT2,A3           aiguillage sur le type-us
+ 
+*
+READT2    ADR       READ5               type-us = 0 :
+          ADR       READ7               type-us = 1 :  )
+          ADR       READ6               type-us = 2 :  [
+          ADR       READ8               type-us = 3 :  ]
+          ADR       READ9               type-us = 4 :  .
+          ADR       READ4               type-us = 5 : objet
+ 
+*          rajoute l'objet LISP contenu dans A1
+ 
+READ4     EQU       *
+          NCONS     A1                  nouvel element
+          POP       A2                  recupere LAST
+          MOV       A1,CDR(A2)          rajoute l'element en queue
+          BRA       READ3               et c'est tout
+ 
+ 
+*          traite une (
+ 
+READ5     EQU       *
+          PUSHAD    READ4               prepare la continuation
+          BRA       READ2               JRST HACK
+ 
+*          traite un [
+ 
+READ6     EQU       *
+          PUSHAD    READ4               prepare la continuation
+          BRA       READ1               JRST HACK
+ 
+*          traite une )
+ 
+READ7     EQU       *
+          POP       A1                  dernier doublet
+READ71    POP       A1                  1er doublet
+          MOV       CAR(A1),A2          A2 pour tester la marque
+          BFEQ      A2,#MK_READ,POPJ
+          MOV       #5,A1               type de l'erreur
+          BRA       ERLEC               et on y va.
+ 
+*          traite un ]
+ 
+READ8     EQU       *
+          POP       A1                  dernier doublet
+          POP       A1                  1er doublet
+          MOV       CAR(A1),A2          A2 pour tester la marque
+          BFEQ      A2,#MK_READ,ERLEC6  il manque la marque
+          MOV       .LIST,CAR(A1)       force le symbole LIST en tete
+          RETURN
+ 
+*          traite un .
+ 
+READ9     EQU       *
+          CALL      READI               lecture de l'expression
+          PUSH      A1                  sauve sa valeur
+          CALL      RD1                 et lit le separateur
+          POP       A1                  derniere expression
+          POP       A2                  dernier doublet
+          JUMPX     READT3,A3           aiguillage sur le type dernier us
+ 
+READT3    ADR       ERLEC7              type-us = 0 : (
+          ADR       READ91              type-us = 1 : )
+          ADR       ERLEC7              type-us = 2 : [
+          ADR       READ92              type-us = 3 : ]
+          ADR       ERLEC7              type-us = 4 : .
+          ADR       ERLEC7              type-us = 5 : objet
+ 
+*                                       cas : .   <s> )
+READ91    EQU       *
+          MOV       A1,CDR(A2)          paire pointee simple
+          BRA       READ71
+ 
+*
+*                                       cas : . <s> ]
+READ92    EQU       *
+          NCONS     A1                  fabrique (<s>)
+          MOV       A1,CDR(A2)          qui devient le dernier element
+          POP       A1                  1er doublet
+          MOV       CAR(A1),A3          pour tester la marque
+          BFEQ.S    A3,#MK_READ,ERLEC8  elle n'est pas marquee
+          MOV       CDR(A1),A3          A3 <- adresse 1er element
+          BTEQ.S    A3,A2,READ93        forme [ s1 . s2 ] => CONS
+          MOV       .MCONS,CAR(A1)      forme [ s1 s2 ... sN ] => MCONS
+          RETURN
+READ93    MOV       .FCONS,CAR(A1)
+          RETURN
+ 
+*
+*         Erreurs a la lecture
+*         ====================
+*
+ 
+ERLEC1    MOV       #1,A1
+          BRA.S     ERLEC
+ERLEC2    MOV       #2,A1
+          BRA.S     ERLEC
+ERLEC3    MOV       #3,A1
+          BRA.S     ERLEC
+ERLEC4    MOV       #4,A1
+          BRA.S     ERLEC
+ERLEC6    MOV       #6,A1
+          BRA.S     ERLEC
+ERLEC7    MOV       #7,A1
+          BRA.S     ERLEC
+ERLEC8    MOV       #8,A1
+          BRA.S     ERLEC
+ERLEC9    MOV       #9,A1               NNARG dans la liste de l'IMPLODE
+          NOP
+*
+ERLEC     EQU       *
+          BFNIL.S   IMPLI,ERLECC1       je ne suis pas dans IMPLODE
+          MOV       .LREAD,A2           nom de la fonction
+          BRA.S     ERLECC2
+ERLECC1   MOV       .IMPLODE,A2         nom de la fonction
+          MOVNIL    IMPLI               plus dans IMPLODE
+ERLECC2   MOVNIL    ISTREAM             entree console
+          BRA       ERRSXT              vers l'erreur de syntaxe
+ 
+ 
+*
+*         Fonctions standards
+*         ===================
+*
+ 
+*
+*          (READ)
+*
+*----------------------------------------
+          FENTRY    LREAD,SUBR0
+*----------------------------------------
+          CALL      RD1                 premiere us
+          BTEQ      A3,#1,LREAD         saute toutes les ) en trop
+          BRA       READ0               vers la vraie lecture
+ 
+*
+*          (IMPLODE l)
+*
+*----------------------------------------
+          FENTRY    IMPLODE,SUBR1
+*----------------------------------------
+          MOV       A1,IMPLD            range la liste a interner
+          MOV       .T,IMPLI            indic IMPLODE = vrai
+          CALL      LREAD               on lit
+          MOVNIL    IMPLI               indic IMPLODE = faux
+          RETURN
+ 
+ 
+*
+*          (READCH)           retourne le caractere suivant
+*
+*----------------------------------------
+          FENTRY READCH,SUBR0
+*----------------------------------------
+          PUSHAD    ASCIII              un jouli JRST
+          BRA       GETCH
+ 
+ 
+*
+*         (READCN)            retourne le caractere suivant (ascii)
+*
+*----------------------------------------
+          FENTRY    READCOD,SUBR0
+*----------------------------------------
+          CALL      GETCH               A4 <- le caractere
+          MOV       A4,A1               la valeur de retour
+          RETURN    *
+ 
+ 
+*
+*         (REREAD l)   SUBR1   rebouffe une liste de caracteres
+*         ?!?!?! il faut sauver RINGUR du G.C.! ?!?!?!?
+*         les MOV A4,RINGUR doivent refaire une nouvelle liste?!?!?!?!?
+*
+*----------------------------------------
+          FENTRY    REREAD,SUBR1
+*----------------------------------------
+          BFCONS.S  A1,REREADE          ca va pas : nb ou liste
+          MOV       A1,RINGUR           et voila
+          RETURN    *
+REREADE   MOV       .REREAD,A2          le nom de la fonction
+          BRA       ERRNLA              il fallait une liste!
+ 
+*
+*         (TEREAD)            termine la ligne
+*
+*----------------------------------------
+          FENTRY TEREAD,SUBR0
+*----------------------------------------
+          CALL      GETCH               car suivant
+          BFEQ.S    A4,#$0A,TEREAD      termine toute ligne par LF
+          BRA       FALSE               tout est dit.
+ 
+*
+*          (PEEKCH)           renifle le caractere suivant
+*
+*----------------------------------------
+          FENTRY PEEKCH,SUBR0
+*----------------------------------------
+          CALL      GETCH               car suivant
+          MOV       A4,RINGUR           pour le relire
+          BRA.S     ASCIII              conversion de retour
+          NOP                           Wouarf...
+ 
+*
+*          (PEEKCN)           renifle le caractere suivant (ascii)
+*
+*----------------------------------------
+          FENTRY PEEKCN,SUBR0
+*----------------------------------------
+          CALL      GETCH               car suivant
+          MOV       A4,RINGUR           pour le relire
+          MOV       A4,A1               la valeur de retour
+          RETURN
+ 
+*
+*         (READLINE)   SUBR0  retourne une ligne de code ASCII
+*
+*----------------------------------------
+          FENTRY    READLINE,SUBR0
+*----------------------------------------
+          MOVNIL    A1                  prepare la liste resultat
+READL2    PUSH      A1                  sauve le result intermediaire
+          CALL      GETCH               A4 <- le code suivant
+          POP       A1                  A1 <- la liste en construction
+          BTEQ      A4,#26,READL8       c'est un EOF!
+          BTEQ      A4,#13,READL5       c'est un return : fin de la ligne
+          CBLT      A4,#32,READL2       c'est un code < 32 : on le saute
+          CONS      A4,A1               ajoute le caractere a la liste
+          BRA       READL2              ca roule
+READL5    EQU       *                   pour le NREVERSE
+          BRA.S     READL7
+READL6    MOV       CDR(A1),A1          caractere suivant en FIN
+READL7    BFCONS.S  A1,READL9           en fait la ligne etait vide
+          MOV       CAR(A1),A3          pour le test
+          BTEQ      A3,#32,READL6       pour sauter tous les espaces
+          BRA       NREVERSE            en on renverse le tout.
+READL8    MOV       A4,A1               si EOF, retourne EOF
+READL9    RETURN    *
+ 
+*
+*          (ASCII n) retourne le caractere de code n
+*
+ 
+ 
+ASCIII    EQU       *
+          MOV       A4,A1               ASCII interne
+*                                       FENTRY ASCII doit suivre
+*----------------------------------------
+          FENTRY    FASCII,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,ASCIERR          il faut vraiment un nb
+          MOV       #0,A4               index sur le tampon
+          MOVBX     A1,BUFAT,A4         1er car du tampon
+          INCR      A4                  caractere suivant
+          MOVBX     #0,BUFAT,A4         fin du tampon
+          INTERN    #1,BUFAT            interne le tampon
+          RETURN    *                   et rentre
+ASCIERR   MOV       .FASCII,A2          le nom de la fonction
+          BRA       ERRNNA
+ 
+*
+*          (CASCII c) retourne le code du caractere c *
+*
+*
+ 
+*----------------------------------------
+          FENTRY    CASCII,SUBR1
+*----------------------------------------
+          BTCONS.S  A1,CASCIER          il faut un symbole, une chaine ou un nb
+          PNAM      A1,BUFAT            tous les carateres dans BUFAT
+          MOV       #0,A2               index
+          XMOVB     A2,BUFAT,A1         ouf!
+          RETURN    *
+CASCIER   MOV       .CASCII,A2          le nom de la fonction
+          BRA       ERRNCA              il fallait un caractere
+ 
+*
+*         (UPPERCASE n)   SUBR1 passe en majuscule
+*
+*----------------------------------------
+          FENTRY    UPPERCASE,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,UPPER9           il faut vraiment un nb
+          UPCASE    A1                  conversion
+          RETURN    *                   et c'est tout
+UPPER9    MOV       .UPPERCASE,A2       nom de la fonction
+          BRA       ERRNNA              il fallait un nb
+ 
+*
+*         (LOWERCASE n)   SUBR1
+*
+*----------------------------------------
+          FENTRY    LOWERCASE,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,LOWER9           il faut vraiment un nb
+          LWCASE    A1                  conversion.
+          RETURN    *                   et c'est tout
+LOWER9    MOV       .LOWERCASE,A2       le nom de la fonction
+          BRA       ERRNNA              il fallait vraiment un nb.
+ 
+*
+*         (DIGITP n)   SUBR1  test si n est un digit
+*
+*----------------------------------------
+          FENTRY    DIGITP,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,DIGITPN          rate
+          CBLT.S    A1,#$30,DIGITPN     caramba
+          CBLE.S    A1,#$39,DIGITPT     la c'est bon
+DIGITPN   MOVNIL    A1                  retourne faux
+DIGITPT   RETURN    *                   et c'est marre
+ 
+*
+*          (TYPECH c n) acces/modif au type du caractere
+*
+ 
+*----------------------------------------
+          FENTRY    TYPECH,SUBRV2
+*----------------------------------------
+          CALL      CASCII              conversion du caractere
+          BTNIL.S   A2,TYPECH1          en GET seul
+          MOVBX     A2,TABCH,A1         force la nouvelle valeur
+TYPECH1   XMOVB     A1,TABCH,A1         lecture valeur
+          RETURN
+ 
+ 
+*
+*          (TYPECN cod n) acces/modif au type du caractere (code ascii)
+*
+*----------------------------------------
+          FENTRY    TYPECOD,SUBRV2
+*----------------------------------------
+          BTNIL.S   A2,TYPECO1          en GET seul
+          MOVBX     A2,TABCH,A1         force la nouvelle valeur
+TYPECO1   XMOVB     A1,TABCH,A1         lecture valeur
+          RETURN
+ 
+ 
+*
+*         Donnees utilisees par le lecteur
+*         ================================
+*
+*
+*          Code des caracteres de la table TABCH
+*
+*               type-ch = 0 :   caracteres null (a ignorer)
+*               type-ch = 1 :   debut de commentaires
+*               type-ch = 2 :   fin de commentaires
+*               type-ch = 3 :   quote caractere
+*               type-ch = 4 :   debut de liste
+*               type-ch = 5 :   fin de liste
+*               type-ch = 6 :   debut de liste crochee
+*               type-ch = 7 :   fin de liste crochee
+*               type-ch = 8 :   point
+*               type-ch = 9 :   separateur nul
+*               type-ch = 10 :  macro-caractere
+*               type-ch = 11 :  delimiteur de chaines de caracteres
+*               type-ch = 12 :  caractere normal
+*               type-ch = 13 :  delimiteur de p-names speciaux
+*               type-ch = 14 :  symbole mono caractere
+*               type-ch = 15 :  specificateur de SHARP-MACRO
+*
+ 
+TABCHINI  EQU       *
+          BYTE      0         00 NULL
+          BYTE      12        01 ctl-A
+          BYTE      12        02 ctl-B
+          BYTE      12        03 ctl-C
+          BYTE      12        04 ctl-D
+          BYTE      12        05 ctl-E
+          BYTE      12        06 ctl-F
+          BYTE      12        07 ctl-G
+          BYTE      9         10 ctl-H  bs
+          BYTE      9         11 ctl-I  tab
+          BYTE      9         12 ctl-J  lf
+          BYTE      9         13 ctl-K  vt
+          BYTE      9         14 ctl-L  ff
+          BYTE      2         15 ctl-M  rc
+          BYTE      12        16 ctl-N
+          BYTE      12        17 ctl-O
+          BYTE      12        20 ctl-P
+          BYTE      12        21 ctl-Q
+          BYTE      12        22 ctl-R
+          BYTE      12        23 ctl-S
+          BYTE      12        24 ctl-T
+          BYTE      12        25 ctl-U
+          BYTE      12        26 ctl-V
+          BYTE      12        27 ctl-W
+          BYTE      12        30 ctl-X
+          BYTE      12        31 ctl-Y
+          BYTE      14        32 ctl-Z
+          BYTE      12        33
+          BYTE      12        34
+          BYTE      12        35
+          BYTE      12        36
+          BYTE      12        37
+          BYTE      9         40 SP
+          BYTE      12        41 !
+          BYTE      11        42 "
+          BYTE      15        43 #
+          BYTE      12        44 $
+          BYTE      12        45 %
+          BYTE      12        46 &
+          BYTE      10        47 '
+          BYTE      4         50 (
+          BYTE      5         51 )
+          BYTE      12        52 *
+          BYTE      12        53 +
+          BYTE      12        54 ,
+          BYTE      12        55 -
+          BYTE      8         56 .
+          BYTE      3         57 /
+          BYTE      12        60 0
+          BYTE      12        61 1
+          BYTE      12        62 2
+          BYTE      12        63 3
+          BYTE      12        64 4
+          BYTE      12        65 5
+          BYTE      12        66 6
+          BYTE      12        67 7
+          BYTE      12        70 8
+          BYTE      12        71 9
+          BYTE      12        72 :
+          BYTE      1         73 ;
+          BYTE      12        74 <
+          BYTE      12        75 =
+          BYTE      12        76 >
+          BYTE      12        77 ?
+          BYTE      10        100 @
+          BYTE      12        101 A
+          BYTE      12        102 B
+          BYTE      12        103 C
+          BYTE      12        104 D
+          BYTE      12        105 E
+          BYTE      12        106 F
+          BYTE      12        107 G
+          BYTE      12        110 H
+          BYTE      12        111 I
+          BYTE      12        112 J
+          BYTE      12        113 K
+          BYTE      12        114 L
+          BYTE      12        115 M
+          BYTE      12        116 N
+          BYTE      12        117 O
+          BYTE      12        120 P
+          BYTE      12        121 Q
+          BYTE      12        122 R
+          BYTE      12        123 S
+          BYTE      12        124 T
+          BYTE      12        125 U
+          BYTE      12        126 V
+          BYTE      12        127 W
+          BYTE      12        130 X
+          BYTE      12        131 Y
+          BYTE      12        132 Z
+          BYTE      6         133 [
+          BYTE      12        134 \
+          BYTE      7         135 ]
+          BYTE      12        136
+          BYTE      12        137
+          BYTE      12        140 `
+          BYTE      12        141 a
+          BYTE      12        142 b
+          BYTE      12        143 c
+          BYTE      12        144 d
+          BYTE      12        145 e
+          BYTE      12        146 f
+          BYTE      12        147 g
+          BYTE      12        150 h
+          BYTE      12        151 i
+          BYTE      12        152 j
+          BYTE      12        153 k
+          BYTE      12        154 l
+          BYTE      12        155 m
+          BYTE      12        156 n
+          BYTE      12        157 o
+          BYTE      12        160 p
+          BYTE      12        161 q
+          BYTE      12        162 r
+          BYTE      12        163 s
+          BYTE      12        164 t
+          BYTE      12        165 u
+          BYTE      12        166 v
+          BYTE      12        167 w
+          BYTE      12        170 x
+          BYTE      12        171 y
+          BYTE      12        172 z
+          BYTE      12        173 {
+          BYTE      13        174 |
+          BYTE      12        175 }
+          BYTE      12        176 ~
+          BYTE      0         177 DEL
+ 
+          END
+ 

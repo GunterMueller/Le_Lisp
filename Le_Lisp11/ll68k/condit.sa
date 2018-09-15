@@ -1,0 +1,41 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :  les	assemblages conditionnels
+*
+****************************************************************
+*
+*	       Jerome CHAILLOUX  (Chailloux.Vlsi)
+*		        I.N.R.I.A.
+*	       Domaine de Voluceau,  Rocquencourt
+*	       B.P. 105,   78153 Le Chesnay Cedex
+*	       tel : (1) 954 90 20	  poste 456
+*
+*****************************************************************
+
+*	Ceci n'est pas un veritable fichier, mais uniquement
+*	la definition des assemblages	conditionnels.
+*	Il doit etre concatene en tete de chaque fichier LLM3!
+
+
+*==================================================
+*	Les assemblages conditionnels
+*==================================================
+
+COLORX	EQU	0	=1 il faut generer les fonctions COLORIX
+COLORY	EQU	0	=1 idem pour le nouveau COLORY
+ASQ	EQU	0	=1 il faut gerer le	BREAK a la VERSAdos
+DEBUG	EQU	0	=1 on debugge l'initialisateur
+DEBUGIO	EQU	0	=1 on ne teste que les I/O
+SYS256K	EQU	0	=1 le systeme n'a que 256K
+
+*============================================================
+*	Definition du type de systeme	a fabriquer
+*============================================================
+*
+*			=0  ==  UNIX
+*			=1  ==  VERSAdos
+*			=2  ==  VERSAmodule
+
+SYSTEM	EQU	1
+
+

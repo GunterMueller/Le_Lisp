@@ -1,0 +1,42 @@
+
+
+
+
+
+		------------------------------
+		 Transport du systeme Le_Lisp
+		------------------------------
+
+
+Petit precis de transport :
+
+Le_Lisp est (presque) entierement ecrit en langage LLM3 et en Lisp.
+
+Pour transporter tout le systeme sur une machine cible il faut :
+
+1 - decrire les instructions LLM3 en terme de la machine cible en
+    general sous la forme de MACROs.
+
+2 - ecrire dans le langage de la machine cible un fichier d'initialisation
+    qui peut comporter en outre des sous-programmes du "run-time" de
+    la simulation de la machine LLM3. Un exemple est donne pour la
+    machine 68000 sous systeme VERSAdos dans le segment :
+	llvsdos.sa
+
+3 - fabriquer un systeme nu (ne contenant que les fonctions primitives
+    de l'interprete) en assemblant et en "linkant" le module
+    d'initialisation de la machine cible et les traductions des
+    differents modules LLM3
+
+4 - quand l'interprete nu fonctionne, fabriquer un systeme interprete
+    en chargeant le fichier :
+	SYSINI.LL
+    puis en invoquant la fonction (load-std) qui charge tous les
+    fichiers de l'environnement initial Le_Lisp.
+    Cette fonction fabrique une image standard du systeme itial
+    interprete.
+
+5 - quand le systeme initial fonctionne il faut charger le compilateur et
+    le chargeur et compiler tout l'environnement initial au moyen de la
+    fonction (llcp-exl) ou (llcp-std). Ces fonctions fabriquent a leur
+    tour une image memoire du systeme standard compile.

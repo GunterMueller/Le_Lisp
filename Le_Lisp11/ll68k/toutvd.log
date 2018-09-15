@@ -1,0 +1,282 @@
+
+
+
+Motorola M68000 Linkage Editor Version	1.40  02/08/83  17:12:19	 Page 1
+
+
+
+
+Options in Effect:	A,-B,-D,-H,-I,-L,M,O,P,-Q,-R,-S,-U,-W,-X
+
+
+Unresolved References:
+
+ERRUDT
+
+
+Multiply Defined Symbols: None
+
+
+    1 Error
+
+      ** Error 600 - Unresolved references
+
+   No Warnings
+
+
+Load module has not	been created due to	fatal error.
+
+
+=chain toutvd
+=/*************************************************************************
+=/*
+=/*    ASSEMBLAGE ET LINK COMPLET DU SYSTEME LE_LISP SOUS SYSTEME VERSADOS
+=/*
+=/*                 LL.LL68K.SA         RACINE COMMUNE A TOUS LES SYSTEMES
+=/*                 LL.LL68KVD.SA       MODULES VERSADOS
+=/*                 LL.L68KV.SA         INITIALISATION LE_LISP
+=/*
+=/*************************************************************************
+=TIME
+ 22:55:22 2/4/83
+=/*************************************************************
+=/*
+=/*       ASSEMBLAGE D'UN MODULE LE_LISP 68K SIMPLE
+=/*       SUIVI OPTIONNELLEMENT D'UNE EDITION DE LIENS.
+=/*
+=/*       EX :  =CHAIN LLASM FOO[,VD|MD|VM]
+=/*************************************************************
+=/*
+=TIME
+ 22:55:26 2/4/83
+=ASM CONDIT/MACROS/LLVSDOS/RTLLM3,LLVSDOS,LLVSDOS;Z=50
+ M68000 RESIDENT ASSEMBLER    VERSION  1.30
+ COPYRIGHTED 1982 BY MOTOROLA, INC.
+
+****** TOTAL ERRORS      0
+****** TOTAL WARNINGS    2
+
+=TIME
+ 22:58:27 2/4/83
+
+=/*************************************************************
+=/*
+=/*       ASSEMBLAGE D'UN MODULE LE_LISP 68K SIMPLE
+=/*       SUIVI OPTIONNELLEMENT D'UNE EDITION DE LIENS.
+=/*
+=/*       EX :  =CHAIN LLASM FOO[,VD|MD|VM]
+=/*************************************************************
+=/*
+=TIME
+ 22:58:32 2/4/83
+=ASM CONDIT/MACROS/LLINIT,LLINIT,LLINIT;Z=50
+ M68000 RESIDENT ASSEMBLER    VERSION  1.30
+ COPYRIGHTED 1982 BY MOTOROLA, INC.
+
+****** TOTAL ERRORS      0
+****** TOTAL WARNINGS    1
+
+=TIME
+ 23:00:48 2/4/83
+
+=/*************************************************************
+=/*
+=/*       ASSEMBLAGE D'UN MODULE LE_LISP 68K SIMPLE
+=/*       SUIVI OPTIONNELLEMENT D'UNE EDITION DE LIENS.
+=/*
+=/*       EX :  =CHAIN LLASM FOO[,VD|MD|VM]
+=/*************************************************************
+=/*
+=TIME
+ 23:00:52 2/4/83
+=ASM CONDIT/MACROS/TOPERR,TOPERR,TOPERR;Z=50
+ M68000 RESIDENT ASSEMBLER    VERSION  1.30
+ COPYRIGHTED 1982 BY MOTOROLA, INC.
+
+****** TOTAL ERRORS      0
+****** TOTAL WARNINGS    0
+
+=TIME
+ 23:4:10 2/4/83
+
+=/*************************************************************
+=/*
+=/*       ASSEMBLAGE D'UN MODULE LE_LISP 68K SIMPLE
+=/*       SUIVI OPTIONNELLEMENT D'UNE EDITION DE LIENS.
+=/*
+=/*       EX :  =CHAIN LLASM FOO[,VD|MD|VM]
+=/*************************************************************
+=/*
+=TIME
+ 23:4:14 2/4/83
+=ASM CONDIT/MACROS/MACGC/GC,GC,GC;Z=50
+ M68000 RESIDENT ASSEMBLER    VERSION  1.30
+ COPYRIGHTED 1982 BY MOTOROLA, INC.
+
+****** TOTAL ERRORS      0
+****** TOTAL WARNINGS    2
+
+=TIME
+ 23:6:34 2/4/83
+
+=/*************************************************************
+=/*
+=/*       ASSEMBLAGE D'UN MODULE LE_LISP 68K SIMPLE
+=/*       SUIVI OPTIONNELLEMENT D'UNE EDITION DE LIENS.
+=/*
+=/*       EX :  =CHAIN LLASM FOO[,VD|MD|VM]
+=/*************************************************************
+=/*
+=TIME
+ 23:6:38 2/4/83
+=ASM CONDIT/MACROS/MACIO/PHYSIO,PHYSIO,PHYSIO;Z=50
+ M68000 RESIDENT ASSEMBLER    VERSION  1.30
+ COPYRIGHTED 1982 BY MOTOROLA, INC.
+
+****** TOTAL ERRORS      0
+****** TOTAL WARNINGS    9
+
+=TIME
+ 23:10:12 2/4/83
+
+=/*************************************************************
+=/*
+=/*       ASSEMBLAGE D'UN MODULE LE_LISP 68K SIMPLE
+=/*       SUIVI OPTIONNELLEMENT D'UNE EDITION DE LIENS.
+=/*
+=/*       EX :  =CHAIN LLASM FOO[,VD|MD|VM]
+=/*************************************************************
+=/*
+=TIME
+ 23:10:16 2/4/83
+=ASM CONDIT/MACROS/READ,READ,READ;Z=50
+ M68000 RESIDENT ASSEMBLER    VERSION  1.30
+ COPYRIGHTED 1982 BY MOTOROLA, INC.
+
+****** TOTAL ERRORS      0
+****** TOTAL WARNINGS    3
+
+=TIME
+ 23:13:51 2/4/83
+
+=/*************************************************************
+=/*
+=/*       ASSEMBLAGE D'UN MODULE LE_LISP 68K SIMPLE
+=/*       SUIVI OPTIONNELLEMENT D'UNE EDITION DE LIENS.
+=/*
+=/*       EX :  =CHAIN LLASM FOO[,VD|MD|VM]
+=/*************************************************************
+=/*
+=TIME
+ 23:13:55 2/4/83
+=ASM CONDIT/MACROS/MACIO/PRINT,PRINT,PRINT;Z=50
+ M68000 RESIDENT ASSEMBLER    VERSION  1.30
+ COPYRIGHTED 1982 BY MOTOROLA, INC.
+
+****** TOTAL ERRORS      0
+****** TOTAL WARNINGS    6
+
+=TIME
+ 23:17:48 2/4/83
+
+=/*************************************************************
+=/*
+=/*       ASSEMBLAGE D'UN MODULE LE_LISP 68K SIMPLE
+=/*       SUIVI OPTIONNELLEMENT D'UNE EDITION DE LIENS.
+=/*
+=/*       EX :  =CHAIN LLASM FOO[,VD|MD|VM]
+=/*************************************************************
+=/*
+=TIME
+ 23:17:52 2/4/83
+=ASM CONDIT/MACROS/EVAL1/EVAL2,EVAL,EVAL;Z=80
+ M68000 RESIDENT ASSEMBLER    VERSION  1.30
+ COPYRIGHTED 1982 BY MOTOROLA, INC.
+
+****** TOTAL ERRORS      0
+****** TOTAL WARNINGS    1
+
+=TIME
+ 23:23:32 2/4/83
+
+=/*************************************************************
+=/*
+=/*       ASSEMBLAGE D'UN MODULE LE_LISP 68K SIMPLE
+=/*       SUIVI OPTIONNELLEMENT D'UNE EDITION DE LIENS.
+=/*
+=/*       EX :  =CHAIN LLASM FOO[,VD|MD|VM]
+=/*************************************************************
+=/*
+=TIME
+ 23:23:36 2/4/83
+=ASM CONDIT/MACROS/CNTRL,CNTRL,CNTRL;Z=50
+ M68000 RESIDENT ASSEMBLER    VERSION  1.30
+ COPYRIGHTED 1982 BY MOTOROLA, INC.
+
+****** TOTAL ERRORS      0
+****** TOTAL WARNINGS    1
+
+=TIME
+ 23:26:36 2/4/83
+
+=/*************************************************************
+=/*
+=/*       ASSEMBLAGE D'UN MODULE LE_LISP 68K SIMPLE
+=/*       SUIVI OPTIONNELLEMENT D'UNE EDITION DE LIENS.
+=/*
+=/*       EX :  =CHAIN LLASM FOO[,VD|MD|VM]
+=/*************************************************************
+=/*
+=TIME
+ 23:26:40 2/4/83
+=ASM CONDIT/MACROS/CARCDR,CARCDR,CARCDR;Z=50
+ M68000 RESIDENT ASSEMBLER    VERSION  1.30
+ COPYRIGHTED 1982 BY MOTOROLA, INC.
+
+****** TOTAL ERRORS      0
+****** TOTAL WARNINGS    0
+
+=TIME
+ 23:29:57 2/4/83
+
+=/*************************************************************
+=/*
+=/*       ASSEMBLAGE D'UN MODULE LE_LISP 68K SIMPLE
+=/*       SUIVI OPTIONNELLEMENT D'UNE EDITION DE LIENS.
+=/*
+=/*       EX :  =CHAIN LLASM FOO[,VD|MD|VM]
+=/*************************************************************
+=/*
+=TIME
+ 23:30:01 2/4/83
+=ASM CONDIT/MACROS/FNTSD1/FNTSD2,FNTSD,FNTSD;Z=80
+ M68000 RESIDENT ASSEMBLER    VERSION  1.30
+ COPYRIGHTED 1982 BY MOTOROLA, INC.
+
+****** TOTAL ERRORS      0
+****** TOTAL WARNINGS    2
+
+=TIME
+ 23:35:40 2/4/83
+
+=/*************************************************************
+=/*
+=/*       ASSEMBLAGE D'UN MODULE LE_LISP 68K SIMPLE
+=/*       SUIVI OPTIONNELLEMENT D'UNE EDITION DE LIENS.
+=/*
+=/*       EX :  =CHAIN LLASM FOO[,VD|MD|VM]
+=/*************************************************************
+=/*
+=TIME
+ 23:35:44 2/4/83
+=ASM CONDIT/MACROS/NBSTRS,NBSTRS,NBSTRS;Z=50
+ M68000 RESIDENT ASSEMBLER    VERSION  1.30
+ COPYRIGHTED 1982 BY MOTOROLA, INC.
+
+****** TOTAL ERRORS      1
+****** TOTAL WARNINGS   15
+
+ RX=$0000 RA=$243A RD=$D001
+CHAIN ABORTED
+
+

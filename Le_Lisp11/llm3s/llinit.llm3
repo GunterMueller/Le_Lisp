@@ -1,0 +1,406 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :   Initialisation du systeme Le_Lisp
+*                                (1er fichier LLM3)
+*
+****************************************************************
+*
+*                Jerome CHAILLOUX  (Chailloux.Vlsi)
+*                           I.N.R.I.A.
+*                Domaine de Voluceau,  Rocquencourt
+*                B.P. 105,   78153 Le Chesnay Cedex
+*                tel : (1) 954 90 20      poste 456
+*
+*****************************************************************
+ 
+ 
+*===========================================================
+*
+*         Les variables gobales du systeme Le_Lisp
+*
+*===========================================================
+ 
+ 
+          IMPURE
+ 
+ 
+*------------------------------------------
+*         1)        La pile
+*------------------------------------------
+ 
+ 
+          XDEF      BSTACK,ESTACK,MSTACK
+ 
+BSTACK    ADR       0         adresse du debut de la pile
+ESTACK    ADR       0         adresse de la fin de la pile
+MSTACK    ADR       0         adresse de la fin de la pile (- 64)
+ 
+ 
+ 
+*------------------------------------------------------------
+*         2)        Les differentes zones des objets Lisp
+*------------------------------------------------------------
+ 
+          XDEF      SMEMI,BMEMI,EMEMI     memoire image
+          XDEF      SCODE,BCODE,ECODE     zone code (binaire compilateur)
+          XDEF      SARRAY,BARRAY,EARRAY  zone tableaux de pointeurs
+          XDEF      SSTRG,BSTRG,ESTRG     zone chaines de carateres
+          XDEF      SSYMB,BSYMB,ESYMB     zone symboles
+          XDEF      SCONS,BCONS,ECONS     zone des CONS
+          XDEF      STOTAL,DTOTAL
+          XDEF      FSYMB,FSTRG         FREE symbol/string
+ 
+ 
+SMEMI     ADR       0                   taille de la memoire image
+SCODE     ADR       0                   taille de la zone binaire
+SARRAY    ADR       0                   taille de la zone tableau
+SSTRG     ADR       0                   taille de la zone chaine
+SSYMB     ADR       0                   taille de la zone symboles
+SCONS     ADR       0                   taille de la zone cons
+STOTAL    ADR       0                   taille de la zone totale
+DTOTAL    ADR       0                   taille de la zone a sauver (CORE)
+ 
+BMEMI     ADR       0                   adresse du debut de la memoire image
+EMEMI     ADR       0                   adresse de la fin de la memoire image
+BCODE     ADR       0                   adresse du debut de la zone binaire
+ECODE     ADR       0                   adresse de fin de la zone binaire
+BARRAY    ADR       0                   adresse du debut de la zone tableau
+EARRAY    ADR       0                   adresse de fin de la zone tableau
+BSTRG     ADR       0                   adresse du debut de la zone chaine
+ESTRG     ADR       0                   adresse de fin de la zone chaine
+BSYMB     ADR       0                   adresse du debut de la zone symbole
+ESYMB     ADR       0                   adresse de fin de la zone symbole
+BCONS     ADR       0                   adresse du debut de la zone liste
+ECONS     ADR       0                   adresse de fin de la zone liste
+ 
+FSTRG     ADR       0                   FREE STRING
+FSYMB     ADR       0                   FREE SYMB
+ 
+ 
+*--------------------------------------------------
+*         3)        La gestion des symboles
+*--------------------------------------------------
+ 
+ 
+          XDEF      MAXBUCKET,HASHMAX,HASHTAB,CSYMB
+ 
+MAXBUCKET EQU       263            nombre d'entree de la table de hachage!
+ 
+HASHMAX   ADR       MAXBUCKET-1    index max de la table
+HASHTAB   DSADR     263            la table de hachage elle-meme
+ 
+CSYMB     ADR       0              1er emplacement disponible en zone symbole
+ 
+ 
+*--------------------------------------------------
+*         4)        Le fichier initial
+*--------------------------------------------------
+ 
+          XDEF      FILIN,FILIZ
+ 
+FILIZ     ADR       0                   0 = pas de fichier initial
+FILIN     DSBYTE    64                  taille 64 caracteres
+ 
+ 
+ 
+*==================================================
+*
+*         Le code de l'initialisation
+*
+*==================================================
+ 
+ 
+          PURE
+ 
+          XDEF      LLINIT,REENTER,THEEND
+ 
+LLINIT    EQU       *
+ 
+*         a cet endroit :
+*         - la memoire de travail a ete allouee
+*         - le canal terminal a ete ouvert en mode caratere sans echo
+*         - le systeme de fichiers a ete initialise
+ 
+*         les memoires globales suivantes ont ete initialisees :
+*           BMEMI
+*                   base de la zone dynamique
+*           SMEMI SCODE SARRAY SSTRG SSYMB SCONS
+*                   les tailles des zones
+*           BSTACK ESTACK MSTACK
+*                   la taille de la pile
+*           FILIZ FILIN
+*                   la taille et le nom du fichier initial
+ 
+ 
+*         Fin du calcul de toutes les variables des zones
+ 
+          MOV       BMEMI,A1            memoire image
+          PLUS      SMEMI,A1
+          DECR      A1
+          MOV       A1,EMEMI
+ 
+          INCR      A1
+          MOV       A1,BCODE            zone code
+          PLUS      SCODE,A1
+          DECR      A1
+          MOV       A1,ECODE
+ 
+          INCR      A1
+          MOV       A1,BARRAY           zone tableau
+          PLUS      SARRAY,A1
+          DECR      A1
+          MOV       A1,EARRAY
+ 
+          INCR      A1
+          MOV       A1,BSTRG            zone chaine
+          SETBSTRG  A1
+          PLUS      SSTRG,A1
+          DECR      A1
+          MOV       A1,ESTRG
+ 
+          INCR      A1
+          MOV       A1,BSYMB            zone symbole
+          SETNIL    A1
+          PLUS      SSYMB,A1
+          DECR      A1
+          MOV       A1,ESYMB
+ 
+          INCR      A1
+          SETBCONS  A1
+          MOV       A1,BCONS            zone liste
+          PLUS      SCONS,A1
+          DECR      A1
+          MOV       A1,ECONS
+ 
+*         Initialisation de la pile lisp
+
+ 
+          SSTACK    BSTACK              init la pile Le_Lisp
+ 
+*         Initialisation de la zone des symboles
+ 
+          XREF      BUILDAT             pour les MAKxxx (in RTLLM3)
+          XREF      .VOID               idem (in READ)
+ 
+          XDEF      .NIL,.UNDEF         ils sont definis ici
+ 
+     IFNE DEBUG
+          MSG       8,<' INI_NIL'>
+     ENDC
+          MOV       HASHMAX,A1          taille de la table de hachage
+          BRA.S     INHAS2              on y va
+INHAS1    MOVX      #0,HASHTAB,A1       raze le bucket
+INHAS2    SOBGEZ    A1,INHAS1           il en reste
+ 
+
+*                                       donc de NIL!
+ XDEF DIBUG
+DIBUG EQU *
+
+          SETNIL    BSYMB
+          MOV       BSYMB,CSYMB
+
+          MAKCST    NIL,0,.VOID,3,'NIL'      le premier symbole c'est NIL!
+          MAKCST    UNDEF,0,.VOID,5,'UNDEF'  le second c'est UNDEF!
+ 
+          SETBVAR   CSYMB               debut des variables
+ 
+*         Les fonctions locales systeme
+ 
+          MAKFNT    LLVERSION,0,.VOID,7,'VERSION'
+          MAKFNT    FFSYSTEM,0,.VOID,6,'SYSTEM'
+          MAKCST    VAXUNIX,0,.VOID,7,'VAXUNIX'
+          MAKCST    SM90,0,.VOID,4,'SM90'
+          MAKCST    VERSADOS,0,.VOID,8,'VERSADOS'
+          MAKCST    VERSAMODULE,0,.VOID,11,'VERSAMODULE'
+ 
+          MAKFNT    RESET,0,.VOID,5,'RESET'
+          MAKFNT    STOP,0,.VOID,4,'QUIT'
+          MAKFNT    STOP,0,.VOID,4,'STOP'
+          MAKFNT    STOP,0,.VOID,3,'END'
+ 
+*         la creation des autres symboles
+ 
+          XREF      INI_TOP                       in TOPERR
+          XREF      INI_GC                        in GC
+          XREF      INI_PIO                       in PHYSIO
+          XREF      INI_READ                      in READ
+          XREF      INI_PRINT                     in PRINT
+          XREF      INI_EVAL                      in EVAL1
+          XREF      INI_CAD                       in CARCDR
+          XREF      INI_STD                       in FNTSTD
+          XREF      INI_CTL                       in CNTRL
+          XREF      INI_NBS                       in NBSTRS
+          XREF      INI_BLL                       in BLLSHT
+ 
+ 
+     IFNE DEBUG
+          MSG       8,<' INI_TOP'>
+     ENDC
+          CALL      INI_TOP             in TOPERR
+     IFNE DEBUG
+          MSG       8,<' INI_GC '>
+     ENDC
+          CALL      INI_GC              in GC
+     IFNE DEBUG
+          MSG       8,<' INI_PIO'>
+     ENDC
+          CALL      INI_PIO             in PHYSIO
+     IFNE DEBUG
+          MSG       8,<' INI_REA'>
+     ENDC
+          CALL      INI_READ            in READ
+     IFNE DEBUG
+          MSG       8,<' INI_PRI'>
+     ENDC
+          CALL      INI_PRINT           in PRINT
+     IFNE DEBUG
+          MSG       8,<' INI_EVA'>
+     ENDC
+          CALL      INI_EVAL            in EVAL
+     IFNE DEBUG
+          MSG       8,<' INI_CTL'>
+     ENDC
+          CALL      INI_CTL             in CNTRL
+     IFNE DEBUG
+          MSG       8,<' INI_CAD'>
+     ENDC
+          CALL      INI_CAD             in CARCDR
+     IFNE DEBUG
+          MSG       8,<' INI_STD'>
+     ENDC
+          CALL      INI_STD             in FNTSTD
+     IFNE DEBUG
+          MSG       8,<' INI_NBS'>
+     ENDC
+          CALL      INI_NBS             in NBSTRS
+     IFNE ASQ
+          XREF      INI_ASR
+          JCALL     INI_ASR
+     ENDC
+     IFNE COLORX
+          XREF      INI_LP,INI_CX,INI_CY
+          JCALL     INI_LP
+          JCALL     INI_CX
+          JCALL     INI_CY
+     ENDC
+     IFNE COLORY
+          XREF      INI_CRY
+          JCALL     INI_CRY
+     ENDC
+     IFNE DEBUG
+          MSG       8,<' INI_BLL'>
+     ENDC
+          JCALL     INI_BLL             in BLLSHT (et c'est la derniere)
+ 
+*
+*         Le top-level actuel
+*
+ 
+          TTYOUT    #70,LLMSG,A1        message de bienvenue
+          BTEQ      SMEMI,#0,IMIN1      pas de MI
+          TTYOUT    #10,OUIMSG,A1
+          BRA.S     IMIN2
+IMIN1     TTYOUT    #10,NONMSG,A1
+IMIN2     EQU       *
+ 
+          XREF      TRYATOM,INPUT
+ 
+          BTEQ.S    FILIZ,#0,IMIN3      pas de fichier initial
+          INTERN    FILIZ,FILIN
+          CALL      INPUT
+IMIN3     EQU       *
+ 
+ 
+*
+*         Le point de retour a chaud
+*
+ 
+REENTER   EQU       *
+          SSTACK    BSTACK              repositionne la pile lisp
+          TTYOUT    #10,REEMSG,A1       "ca repart ... "
+ 
+          XREF      SYSTOP              in TOPERR (toplevel Le_Lisp)
+          BRA       SYSTOP              essai du nouveau top-level.
+ 
+ 
+*
+*         Fin du systeme Le_Lisp
+*
+ 
+THEEND    EQU       *
+          TTYOUT    #30,TEEMSG,A1
+          TTYOUT    #2,FINMSG,A1
+ 
+          XREF      LL_EXIT
+          CALL      LL_EXIT
+ 
+ 
+*
+*         Les fonctions systeme
+*         =====================
+*
+*----------------------------------------
+          FENTRY    LLVERSION,SUBR0
+*----------------------------------------
+          MOV       #NVERSION,A1
+          RETURN
+ 
+*----------------------------------------
+          FENTRY    FFSYSTEM,SUBR0
+*----------------------------------------
+    IFEQ  SM90                          cas special SM90
+          MOV       .SM90,A1
+          RETURN
+    ENDC
+    IFNE  VERSADOS
+          MOV       .VERSADOS,A1
+          RETURN
+     ENDC
+ 
+*----------------------------------------
+          FENTRY    RESET,SUBR0
+*----------------------------------------
+          BRA       REENTER             et voila
+ 
+ 
+*----------------------------------------
+          FENTRY    STOP,SUBR0
+*----------------------------------------
+          BRA       THEEND              c'est tout !
+ 
+ 
+ 
+*
+*         Data
+*
+ 
+          IMPURE
+ 
+NVERSION  EQU       11
+ 
+LLMSG     ASCII     <'*******  Le_Lisp  VAX  (by INRIA) '>
+          ASCII     <' version 11  (26/Fevrier/83)      '>
+          BYTE      13
+          BYTE      10
+ 
+TEEMSG    ASCII     <'Que Le_Lisp soit avec vous. '>
+FINMSG    BYTE      13
+          BYTE      10
+ 
+OUIMSG    ASCII      <'avec MI '>
+          BYTE      13
+          BYTE      10
+NONMSG    ASCII      <'sans MI '>
+          BYTE      13
+          BYTE      10
+TPMSG     ASCII      <'= '>
+ 
+REEMSG    ASCII     <'On y va '>
+          BYTE      13
+          BYTE      10
+ 
+ 
+          END
+ 
+ 

@@ -1,0 +1,1168 @@
+*************************************************************
+*						*
+*	    Les Macros LLM3	pour Le_Lisp 68K		*
+*						*
+*************************************************************
+*						*
+*		  Jerome	 CHAILLOUX		*
+*						*
+*		  I . N .	R . I . A	.		*
+*	     Domaine de Voluceau, Rocquencourt		*
+*	     B.P.	105   78153 Le Chesnay Cedex		*
+*	     Tel : (1) 954 90 20   poste 456		*
+*						*
+*************************************************************
+
+	TTL	Le_Lisp 68K, by Jerome Chailloux.
+
+	OPT	MEX	je veux voir les macro-expansions
+	OPT	NOCL	mais pas les conditionnelles
+
+	FORMAT		je veux une liste bien formattee
+
+*	Definition des sections
+
+
+	SECTION	10		section de l'interprete
+
+	NOLIST			en general.
+	PAGE
+
+
+********************************************
+*				   *
+*	Allocation des registres	   *
+*				   *
+********************************************
+
+*	A0	reserve pour les interfaces systemes (et registre
+*		adresse auxilliaire)
+*	A1	|
+*	A2	|  les fameux 4
+*	A3	|  accus de LISP
+*	A4	|
+*	A5	??? mais Pascal y tient!
+*	A6	le pointeur sur la liste libre FREE
+*	A7	le pointeur de pile	LISP
+
+*	D0	reserve pour les interfaces systemes
+*	D1	accu 1 arithmetique
+*	D2	accu 2 arithmetique
+*	D3	???
+*	D4	BSTRG	debut de la zone des chaines
+*	D5	NIL	adresse de NIL (debut des symboles)
+*	D6	BVAR	debut de la zone des variables
+*	D7	BCONS	debut de zone liste
+
+
+
+***************************************
+*			        *
+*	EQU symboles d'acces        *
+*			        *
+***************************************
+
+
+*	EQU symboles d'acces aux proprietes naturelles des symbols
+
+CVAL	EQU	0		adresse 32 bits
+PLIST	EQU	4		adresse 32 bits
+FVAL	EQU	8		adresse 32 bits
+PKGC	EQU	12		adresse 32 bits
+ALINK	EQU	16		adresse 32 bits
+FTYPE	EQU	20		code 8 bits
+PTYPE	EQU	21		code 8 bits
+PLEN	EQU	22		compteur 16 bits
+PNAME	EQU	24		caractere	8 bits ...
+
+*	EQU symboles d'acces aux chaines de caracteres et	aux tableaux
+
+VAL	EQU	0
+
+*	EQU symboles d'acces aux doublets de liste
+
+CAR	EQU	0		adresse 32 bits
+CDR	EQU	4		adresse 32 bits
+
+
+**********************************
+*			   *
+*	EQU des ftypes	   *
+*			   *
+**********************************
+
+
+SUBR0	EQU	1	SUBR a 0 arg
+SUBR1	EQU	2
+SUBR2	EQU	3
+SUBR3	EQU	4
+SUBRN	EQU	5
+SUBRF	EQU	6
+EXPR	EQU	7
+FEXPR	EQU	8
+MACRO	EQU	9
+SUBRV1	EQU	10
+SUBRV2	EQU	11
+SUBRV3	EQU	12
+SUBRVN	EQU	13
+
+
+*************************************
+*			      *
+*	EQU des marqueurs	      *
+*			      *
+*************************************
+
+*	marqueurs	de pile
+
+MK_EVAL	EQU	$FFFFFFF0
+MK_READ	EQU	$FFFFFFF1
+MK_SUBRN	EQU	$FFFFFFF2
+MK_MAP	EQU	$FFFFFFF3
+
+*****************************************************************
+*						    *
+*	MACROS qui initialisent les bornes des zones pour	    *
+*	D4=BSTRG,	D5=NIL, D6=BVAR, D7=BCONS		    *
+*						    *
+*****************************************************************
+
+SETBSTRG	MACRO
+	MOVE.L	\1,D4
+	ENDM
+
+SETNIL	MACRO
+	MOVE.L	\1,D5
+	ENDM
+
+SETBVAR	MACRO
+	MOVE.L	\1,D6
+	ENDM
+
+SETBCONS	MACRO
+	MOVE.L	\1,D7
+	ENDM
+
+***************************************************
+*					*
+*	MACROS de	test de type :		*
+*    utilise D4=BSTRG, D5=NIL, D6=BVAR,	D7=BCONS	*
+*					*
+***************************************************
+
+*    TOUT	test de type doit obligatoirement etre
+*    realise par l'une de ces	MACROS !
+*	CMP fait	Dn - <ea>	!!
+
+*	BTNUMB[.S]  ea,lab
+
+BTNUMB	MACRO
+	CMP.L	\1,D4
+	BGT.\0	\2
+	ENDM
+
+*	BFNUMB[.S]  ea,lab
+
+BFNUMB	MACRO
+	CMP.L	\1,D4
+	BLE.\0	\2
+	ENDM
+
+*	BTSTRG[.S]  ea,lab
+
+BTSTRG	MACRO
+	CMP.L	\1,D4
+	BGT.S	\@
+	CMP.L	\1,D5
+	BGT.\0	\2
+\@
+	ENDM
+
+*	BFSTRG[.S] ea,lab
+
+BFSTRG	MACRO
+	CMP.L	\1,D4
+	BGT.\0	\2
+	CMP.L	\1,D5
+	BLE.\0	\2
+	ENDM
+
+*	BTNIL[.S]	 ea,lab
+
+BTNIL	MACRO
+	CMP.L	\1,D5
+	BEQ.\0	\2
+	ENDM
+
+*	BFNIL[.S]	 ea,lab
+
+BFNIL	MACRO
+	CMP.L	\1,D5
+	BNE.\0	\2
+	ENDM
+
+*	BTCST[.S]	 ea,lab
+
+BTCST	MACRO
+	CMP.L	\1,D6
+	BGT.\0	\2
+	ENDM
+
+*	BFCST[.S]	 ea,lab
+
+BFCST	MACRO
+	CMP.L	\1,D6
+	BLE.\0	\2
+	ENDM
+
+*	BTSYMB[.S]  ea,lab
+*	attention	a la double evaluation de <ea>
+
+BTSYMB	MACRO
+	CMP.L	\1,D5
+	BGT.S	\@
+	CMP.L	\1,D7
+	BGT.\0	\2
+\@
+	ENDM
+
+*	BFSYMB.[S]  ea,lab
+*	attention	a la double evaluation de <ea>
+
+BFSYMB	MACRO
+	CMP.L	\1,D5
+	BGT.\0	\2
+	CMP.L	\1,D7
+	BLE.\0	\2
+	ENDM
+
+*	BTVAR[.S]	 ea,lab
+*	attention	a la double evaluation de <ea>
+
+BTVAR	MACRO
+	CMP.L	\1,D6
+	BGT.S	\@
+	CMP.L	\1,D7
+	BGT.\0	\2
+\@
+	ENDM
+
+*	BFVAR.[S]	 ea,lab
+*	attention	a la double evaluation de <ea>
+
+BFVAR	MACRO
+	CMP.L	\1,D6
+	BGT.\0	\2
+	CMP.L	\1,D7
+	BLE.\0	\2
+	ENDM
+
+*	BTCONS[.S]  ea,lab
+
+BTCONS	MACRO
+	CMP.L	\1,D7
+	BLE.\0	\2
+	ENDM
+
+*	BFCONS[.S]  ea,lab
+
+BFCONS	MACRO
+	CMP.L	\1,D7
+	BGT.\0	\2
+	ENDM
+
+********************************************
+*				   *
+*	Manipulations de la	pile	   *
+*				   *
+********************************************
+
+
+*	STACK ea		sauve la valeur du pointeur de pile
+
+STACK	MACRO
+	MOVE.L	A7,\1
+	ENDM
+
+*	SSTACK ea		change la	valeur du	pointeur de pile
+
+SSTACK	MACRO
+	MOVE.L	\1,A7
+	ENDM
+
+*	CHKSTK val,lab	test le debordement	de pile
+
+CHKSTK	MACRO
+	CMP.L	\1,SP
+     IFEQ	LINK		povre link du SM90!
+	BGT.S	\@
+	BRA	\2
+     ENDC
+     IFNE	LINK		au poil
+	BLE	\2
+     ENDC
+	ENDM
+
+*	PUSH  ea,sp	empile un	pointeur
+
+PUSH	MACRO
+	IFC	'\2',''
+	MOVE.L	\1,-(SP)
+	ENDC
+	IFNC	'\2',''
+	MOVE.L	\1,-(\2)
+	ENDC
+	ENDM
+
+*	PUSHAD  ea	empile une constante adresse
+*			utilise le registre	auxiliaire A0
+
+PUSHAD	MACRO
+	PEA	\1
+	ENDM
+
+*	POP  ea,sp		depile un	pointeur
+
+POP	MACRO
+	IFC	'','\2'
+	MOVE.L	(SP)+,\1
+	ENDC
+	IFNC	'\2',''
+	MOVE.L	(\2)+,\1
+	ENDC
+	ENDM
+
+*	TOPST  ea,sp     consulte le sommet de pile
+
+TOPST	MACRO
+	IFC	'\2',''
+	MOVE.L	(SP),\1
+	ENDC
+	IFNC	'\2',''
+	MOVE.L	(\2),\1
+	ENDC
+	ENDM
+
+*	XTOPST ea,sp	echange du sommet de pile avec ea
+*			utilise le reg auxiliaire A0
+
+XTOPST	MACRO
+	IFC	'\2',''
+	MOVE.L	(SP),A0
+	MOVE.L	\1,(SP)
+	MOVE.L	A0,\1
+	ENDC
+	IFNC	'\2',''
+	MOVE.L	(\2),A0
+	MOVE.L	\1,(\2)
+	MOVE.L	A0,\1
+	ENDC
+	ENDM
+
+*	ADJSTK		ajuste la	pile
+*	SP = SP +	TOPST
+
+ADJSTK	MACRO
+	MOVE.L	(SP)+,D0	sommet de	pile
+	LSL.L	#2,D0	en mode .L
+	ADD.L	D0,SP	et voila.
+	ENDM
+
+*	CALL adr		appel d'un sous-programme
+
+CALL	MACRO
+	BSR.\0	\1
+	ENDM
+
+*	JCALL adr		appel d'un sous-programme externe
+
+JCALL	MACRO
+	JSR	\1
+	ENDM
+
+*	RETURN		retour d'un sous-programme
+
+RETURN	MACRO
+	RTS	\1
+	ENDM
+
+
+****************************************
+*			         *
+*	Autres MACROS d'acces        *
+*			         *
+****************************************
+
+
+*	MOV s,d	   pour ne pas oublier le .L
+
+MOV	MACRO
+	MOVE.L	\1,\2
+	ENDM
+
+*	MOVB s,d	  idem pour un octet
+
+MOVB	MACRO
+	MOVE.W	\1,D0	a cause des Ax
+	MOVE.B	D0,\2
+	ENDM
+
+*	MOVAD s,d		pour charger une adresse
+
+MOVAD	MACRO
+	LEA	\1,\2
+	ENDM
+
+*	MOVNIL d	charge NIL dans la destination
+
+MOVNIL	MACRO
+	MOVE.L	D5,\1
+	ENDM
+
+
+*	GFTYPE s,d	FTYPE(s) -> d
+
+GFTYPE	MACRO
+	CLR.L	D0
+	MOVE.B	FTYPE(\1),D0
+	MOVE.L	D0,\2
+	ENDM
+
+*	SFTYPE s,d	s -> FTYPE(d)
+
+SFTYPE	MACRO
+	MOVE.L	\1,D0
+	MOVE.B	D0,FTYPE(\2)
+	ENDM
+
+*	GPTYPE s,d	PTYPE(s) -> d
+
+GPTYPE	MACRO
+	CLR.L	D0
+	MOVE.B	PTYPE(\1),D0
+	MOVE.L	D0,\2
+	ENDM
+
+*	SPTYPE s,d	s -> PTYPE(d)
+
+SPTYPE	MACRO
+	MOVE.L	\1,D0
+	MOVE.B	D0,PTYPE(\2)
+	ENDM
+
+*	SSPTYPE s		force le bit : symbol special
+
+SSPTYPE	MACRO
+	BSET.B	#7,PTYPE(\1)
+	ENDM
+
+*	BTSPTYPE s,lab     br si le bitsymbole special est positinne
+
+BTSPTYPE	MACRO
+	BTST.B	#7,PTYPE(\1)
+	BNE	\2	Z=0 si bit a 0
+	ENDM
+
+*	GPLEN s,d		PLEN(s) -> d
+
+GPLEN	MACRO
+	CLR.L	D0
+	MOVE.W	PLEN(\1),D0
+	MOVE.L	D0,\2
+	ENDM
+
+*	SPLEN s,d		s -> PLEN(d)
+
+SPLEN	MACRO
+	MOVE.W	\1,PLEN(\2)
+	ENDM
+
+*	JUMPI  op	     realise un branchement au tavers un
+*		     registre
+
+JUMPI	MACRO
+	JMP	(\1)
+	ENDM
+
+*	JUMPX table,index	  realise	un branchement
+*	  indirect (table) indexe (index)
+*	  utilise	le registre auxiliaire A0
+
+JUMPX	MACRO
+	MOVE.L	\2,D0		pour calculer l'adresse
+	LSL.L	#2,D0		  de mots.
+	LEA	\1,A0
+	MOVE.L	(A0,D0.L),A0
+	JMP	(A0)
+	ENDM
+
+*	MOVX source,base,index   source -> base(index)
+*	permet de	manipuler	des tables de doubles mots
+
+MOVX	MACRO			vraiment elle est a	refaire.
+	MOVE.L	\3,D0		pour calculer
+	LSL.L	#2,D0		adresse de .L
+	LEA	\2,A0		adresse de la table
+	MOVE.L	\1,(A0,D0.L)	transfert
+	ENDM
+
+*	MOVBX source,base,index   source -> base(index)
+*	permet de	manipuler	des tables d'octets
+
+MOVBX	MACRO			vraiment elle est a	refaire.
+	MOVE.L	\1,D0		le caractere a transferer
+	LEA	\2,A0		adresse de la table
+	MOVE.B	D0,(A0,\3.L)	transfert
+	ENDM
+
+*	XMOV index,base,dest   base(index)  ->	dest
+*	permet de	manipuler	des tables de doubles mots
+
+XMOV	MACRO			celle-la aussi!
+	MOVE.L	\1,D0		index
+	LSL.L	#2,D0		adresse de .L
+	LEA	\2,A0		adresse de la table
+	MOVE.L	(A0,D0.L),\3	transfert
+	ENDM
+
+*	XMOVB index,base,dest   base(index)  ->	 dest
+*	permet de	manipuler	des tables d'octets
+
+XMOVB	MACRO			celle-la aussi!
+	CLR.L	D0		prepare le resultat
+	LEA	\2,A0		adresse de la table
+	MOVE.B	(A0,\1.L),D0	transfert
+	MOVE.L	D0,\3		et range le resultat
+	ENDM
+
+*	MOVXSP source,index	  source -> SP(index+1)
+*	permet de	manipuler	directement la pile
+
+MOVXSP	MACRO			vraiment elle est a	refaire.
+	MOVE.L	\2,D0		pour calculer
+	LSL.L	#2,D0		adresse de .L
+	MOVE.L	\1,4(A7,D0.L)	transfert
+	ENDM
+
+*	XSPMOV index,dest	SP(index+1)  ->  dest
+*	permet de	manipuler	directement la pile
+
+XSPMOV	MACRO			celle-la aussi!
+	MOVE.L	\1,D0		index
+	LSL.L	#2,D0		adresse de .L
+	MOVE.L	4(A7,D0.L),\2	 transfert
+	ENDM
+
+
+***************************************************
+*					*
+*	Comparaisons de pointeurs		*
+*					*
+***************************************************
+
+*	BTEQ  ae1,ae2,lab	test l'egalite de 2	pointeurs
+
+BTEQ	MACRO
+	CMP.L	\2,\1
+	BEQ.\0	\3
+	ENDM
+
+*	BFEQ ae1,ae2,lab	test l'inegalite de	2 pointeurs
+
+BFEQ	MACRO
+	CMP.L	\2,\1
+	BNE.\0	\3
+	ENDM
+
+***************************************************
+*					*
+*	Acces aux	valeurs numeriques		*
+*					*
+***************************************************
+
+*	VALNB Ax,Dy	valeur de	Ax -> Dy
+
+VALNB	MACRO
+	MOVE.L	\1,\2
+	EXT.L	\2
+	ENDM
+
+*	CRANB Dy,Ax	interne la valeur Dy -> Ax
+
+CRANB	MACRO
+	AND.L	#$0000FFFF,\1
+	MOVE.L	\1,\2
+	ENDM
+
+
+***************************************************
+*					*
+*	Comparaisons arithmetiques		*
+*					*
+***************************************************
+
+*	CBxx actuellement sur 32 bits, bientot sur 16 bits
+
+CBEQ	MACRO
+	CMP.L	\2,\1
+	BEQ.\0	\3
+	ENDM
+
+CBNE	MACRO
+	CMP.L	\2,\1
+	BNE.\0	\3
+	ENDM
+
+CBLT	MACRO
+	CMP.L	\2,\1
+	BLT.\0	\3
+	ENDM
+
+CBLE	MACRO
+	CMP.L	\2,\1
+	BLE.\0	\3
+	ENDM
+
+CBGT	MACRO
+	CMP.L	\2,\1
+	BGT.\0	\3
+	ENDM
+
+CBGE	MACRO
+	CMP.L	\2,\1
+	BGE.\0	\3
+	ENDM
+
+
+**********************************************
+*				     *
+*	Les instuctions numeriques	     *
+*				     *
+**********************************************
+
+*	INCR  reg[,lab]
+
+INCR	MACRO
+	IFC	'\2',''
+	ADDQ.L	#1,\1
+	ENDC
+	IFNC	'\2',''
+	CLR.L	D0
+	MOVE.W	\1,D0
+	ADDQ.W	#1,D0
+	BVS	\2
+	MOVE.L	D0,\1
+	ENDC
+	ENDM
+
+*	DECR  reg[,lab]
+
+DECR	MACRO
+	IFC	'\2',''
+	SUBQ.L	#1,\1
+	ENDC
+	IFNC	'\2',''
+	CLR.L	D0
+	MOVE.W	\1,D0
+	SUBQ.W	#1,D0
+	BVS.\0	\2
+	MOVE.L	D0,\1
+	ENDC
+	ENDM
+
+*	PLUS  op1,op2[,lab]		op1 + op2	-> op2
+
+PLUS	MACRO
+	IFC	'\3',''
+	ADD.L	\1,\2
+	ENDC
+	IFNC	'\3',''
+	CLR.L	D0
+	MOVE.W	\1,D0
+	ADD.W	\2,D0
+	BVS.\0	\3
+	MOVE.L	D0,\2
+	ENDC
+	ENDM
+
+*	DIFF  op1,op2[,lab]		 op1 - op2 ->  op2
+
+DIFF	MACRO
+	IFC	'\3',''
+	SUB.L	\1,\2
+	ENDC
+	IFNC	'\3',''
+	CLR.L	D0
+	MOVE.W	\1,D0
+	SUB.W	\2,D0
+	BVS.\0	\3
+	MOVE.L	D0,\2
+	ENDC
+	ENDM
+
+*	NEGATE   op1
+
+NEGATE	MACRO
+	CLR.L	D0
+	MOVE.W	\1,D0
+	NEG.W	D0
+	MOVE.L	D0,\1
+	ENDM
+
+*	TIMES  op1,op2,lab	   op1 * op2 -> op2
+
+TIMES	MACRO
+	CLR.L	D0
+	MOVE.W	\1,D0
+	MOVE.W	\2,D1
+	MULS	D1,D0
+	BVS	\3
+	AND.L	#$FFFF,D0
+	MOVE.L	D0,\2
+	ENDM
+
+*	QUO  op1,op2,lab	 op1 / op2 -> op2
+
+QUO	MACRO
+	MOVE.W	\1,D0
+	EXT.L	D0
+	MOVE.W	\2,D1
+	DIVS	D1,D0
+	BVS	\3
+	AND.L	#$FFFF,D0
+	MOVE.L	D0,\2
+	ENDM
+
+*	REM  op1,op2,lab	 op1 \ op2 -> op2
+
+REM	MACRO
+	MOVE.W	\1,D0
+	EXT.L	D0
+	MOVE.W	\2,D1
+	DIVS	D1,D0
+	BVS	\3
+	SWAP	D0
+	AND.L	#$FFFF,D0
+	MOVE.L	D0,\2
+	ENDM
+
+
+***************************************************
+*					*
+*	Les instructions logiques		*
+*					*
+***************************************************
+
+*	LOR op1,op2    op1 OR op2  ->	op2
+
+LOR	MACRO
+	MOVE.W	\1,D0
+	MOVE.W	\2,D1
+	OR.W	D1,D0
+	MOVE.L	D0,\2
+	ENDM
+
+*	LXOR op1,op2    op1	XOR op2  -> op2
+
+LXOR	MACRO
+	MOVE.W	\1,D0
+	MOVE.W	\2,D1
+	EOR.W	D1,D0
+	MOVE.L	D0,\2
+	ENDM
+
+*	LAND op1,op2    op1	AND op2  -> op2
+
+LAND	MACRO
+	MOVE.W	\1,D0
+	MOVE.W	\2,D1
+	AND.W	D1,D0
+	MOVE.L	D0,\2
+	ENDM
+
+
+***************************************************
+*					*
+*	Les instructions sur champ de	bits	*
+*					*
+***************************************************
+
+
+*	LBYTE	op1,op2,lab    left-byte (op1)  ->  op2
+*			     vers	lab si op2 = 0
+
+LBYTE	MACRO
+	CLR.L	D0
+	MOVE.W	\1,D0
+	LSR.W	#8,D0
+	AND.W	#$FF,D0
+	MOVE.L	D0,\2
+	IFNC	'\3',''
+	TST.L	D0		si op2 reg adresse
+	BEQ.\0	\3
+	ENDC
+	ENDM
+
+*	RBYTE	op1,op2,lab   right-byte (op1) -> op2
+*			    vers lab si op2	= 0
+
+RBYTE	MACRO
+	CLR.L	D0
+	MOVE.W	\1,D0
+	AND.W	#$FF,D0
+	MOVE.L	D0,\2
+	IFNC	'\3',''
+	TST.L	D0
+	BEQ.\0	\3
+	ENDC
+	ENDM
+
+
+**********************************************
+*				     *
+*	L'operateur de boucle	     *
+*				     *
+**********************************************
+
+
+*	SOBGEZ  reg,lab	reg<-reg-1; si reg >= 0 branch a lab
+
+SOBGEZ	MACRO
+	SUBQ.L	#1,\1
+	MOVE.L	\1,D0	positionne les cc
+	BGE.\0	\2
+	ENDM
+
+
+**********************************************
+*				     *
+*	CONStructions des doublets	     *
+*	on suppose FREE = A6	     *
+*				     *
+**********************************************
+
+
+*	NCONS car		car <- (car)
+
+NCONS	MACRO
+	CMP.L	A6,D5	FREE = NIL ?
+	BNE.S	\@	non : on peut construire
+	BSR	GC	appel du GC
+\@	MOVE.L	\1,CAR(A6)
+	MOVE.L	A6,\1
+	MOVE.L	CDR(A6),A6
+	MOVE.L	D5,CDR(\1)
+	ENDM
+
+*	XCONS cdr,car	car <- (car . cdr)
+
+XCONS	MACRO
+	CMP.L	A6,D5	FREE = NIL ?
+	BNE.S	\@	non
+	BSR	GC
+\@	MOVE.L	\2,CAR(A6)
+	MOVE.L	A6,\2
+	MOVE.L	CDR(A6),A6
+	MOVE.L	\1,CDR(\2)
+	ENDM
+
+*	CONS car,cdr	cdr <- (car .cdr)
+*	utilise le reg auxiliaire A0
+
+CONS	MACRO
+	CMP.L	A6,D5		FREE = NIL ?
+	BNE.S	\@		non
+	BSR	GC
+\@	MOVE.L	A6,A0
+	MOVE.L	\1,CAR(A6)
+	MOVE.L	CDR(A6),A6
+	MOVE.L	\2,CDR(A0)
+	MOVE.L	A0,\2
+	ENDM
+
+
+**************************************
+*			       *
+*	Gestion des symboles       *
+*			       *
+**************************************
+
+
+*	FENTRY nom,type	declaration d'un point d'entree
+*	reserve un mot de type .XXX qui contiendra l'adresse
+*	du symbole XXX, prepare l'adresse de la	fonction XXX
+*	de type XDEF et prepare le ftype .$XXX
+
+FENTRY	MACRO
+	SECTION	15	donnees
+.\1	DC.L	0
+.$\1	EQU	\2
+	SECTION	10	code
+	XDEF	\1
+\1	EQU	*
+	ENDM
+
+
+*	MAKFNT nom,ptype,pkg,plen,pname
+*	suppose :	D5=NIL, D4=UNDEF, D2=currentsymbole
+*		A0=zonatm
+
+MAKFNT	MACRO
+	MOVE.L	CSYMB,A0		charge la	base des symboles
+	MOVE.L	A0,.\1		adresse du symbole
+	MOVE.L	A0,D2		pour BUILDAT
+	MOVE.L	D4,(A0)+		CVAL = UNDEF
+	MOVE.L	D5,(A0)+		PLIST = NIL
+	LEA	\1,A1		adr de la	fnt
+	MOVE.L	A1,(A0)+		FVAL = adresse de la routine
+	MOVE.L	\3,(A0)+		PKGC
+	JSR	BUILDAT
+	DC.B	.$\1		FTYPE
+	DC.B	\2		PTYPE
+	DC.W	\4		PLEN
+	DC.W	\5		PNAME
+	IFNC	'\6',''
+	DC.W	\6		suite du PNAME
+	ENDC
+	ENDM
+
+
+*	MAKCST	nom,ptype,pkgc,plen,pname
+*	suppose :	D5=NIL, D4=UNDEF, D2=currentsymbole
+*		A0=zonatm
+
+MAKCST	MACRO
+	SECTION	15
+.\1	DC.L	0		adresse du nom
+	SECTION	10
+	MOVE.L	CSYMB,A0		base de chargement
+	MOVE.L	A0,.\1		adresse du symbole
+	MOVE.L	A0,D2		pour BUILDAT
+	MOVE.L	A0,(A0)+		CVAL = l'adresse du	symbole
+	MOVE.L	D5,(A0)+		PLIST = NIL
+	CLR.L	(A0)+		FVAL = 0
+	MOVE.L	\3,(A0)+		PKGC
+	JSR	BUILDAT
+	DC.W	\2		FTYPE (=0) + PTYPE
+	DC.W	\4		PLEN
+	DC.W	\5		PNAME
+	IFNC	'\6',''
+	DC.W	\6		suite du PNAME
+	ENDC
+	ENDM
+
+
+*	MAKVOID	 nom,ptype  : fabrique le symbole vide
+*	suppose :	D5=NIL, D4=UNDEF, D2=currentsymbole
+*		A0=zonatm
+
+MAKVOID	 MACRO
+	SECTION	15
+.\1	DC.L	0		adresse du nom
+	SECTION	10
+	MOVE.L	CSYMB,A0		base de chargement
+	MOVE.L	A0,.\1		adresse du symbole
+	MOVE.L	A0,D2		pour BUILDAT
+	MOVE.L	A0,(A0)+		CVAL = l'adresse du	symbole
+	MOVE.L	D5,(A0)+		PLIST = NIL
+	CLR.L	(A0)+		FVAL = 0
+	MOVE.L	.VOID,(A0)+	PKGC
+	JSR	BUILDAT
+	DC.W	\2		FTYPE (=0) + PTYPE
+	DC.W	0		PLEN
+	ENDM
+
+*	MAKSTRG size,adrbuff
+*	fabrique une (nouvelle) chaine de caracteres
+
+MAKSTRG	MACRO
+	MOVE.L	\1,D0
+	LEA	\2,A0
+	JSR	CRASTRG
+	ENDM
+
+*	INTERN size,adrbuff
+
+INTERN	MACRO
+	MOVE.L	\1,D0
+	LEA	\2,A0
+	JSR	TRYATOM
+	ENDM
+
+*	PNAM p,e,i    PLEN(A1)->p PNAME(A1)->e[i]
+*	si i n'est pas fourni, i=0  (index dans	\2)
+*	appel de GEPNAM avec :
+*		A1 l'atome, A0 l'adresse, D0 l'index
+
+PNAM	MACRO
+	LEA	\2,A0
+	IFC	'\3',''
+	CLR.L	D0
+	ENDC
+	IFNC	'\3',''
+	MOVE.L	\3,D0
+	ENDC
+	JSR	GETPNAM
+	MOVE.L	D1,\1
+	ENDM
+
+
+*	UPCASE d		conversion lower ->	upper case
+
+UPCASE	MACRO
+	CMP.L	#$61,\1	'a' minuscule ?
+	BLT.S	\@
+	CMP.L	#$7A,\1	'z'
+	BGT.S	\@
+	SUB.L	#$20,\1	passage en maj
+\@
+	ENDM
+
+*	LWCASE d		conversion upper ->	lower case
+
+LWCASE	MACRO
+	CMP.L	#$41,\1	'A' majuscule
+	BLT.S	\@
+	CMP.L	#$5A,\1	'Z'
+	BGT.S	\@
+	ADD.L	#$20,\1	passage en min
+\@
+	ENDM
+
+
+*****************************************
+*				*
+*	Les pseudos de LLM3		*
+*				*
+*****************************************
+
+
+*	TITRE	nom,texte
+
+TITRE	MACRO
+\1	IDNT	1,1	\2
+	ENDM
+
+*	PURE
+
+PURE	MACRO
+	SECTION	10
+	ENDM
+
+*	IMPURE
+
+IMPURE	MACRO
+	SECTION	15
+	ENDM
+
+
+*	ADR	adresse
+
+ADR	MACRO
+	DC.L	\1
+	ENDM
+
+BYTE	MACRO
+	DC.B	\1
+	ENDM
+
+DSADR	MACRO
+	DS.L	\1
+	ENDM
+
+DSBYTE	MACRO
+	DS.B	\1
+	ENDM
+
+ASCII	MACRO
+	DC.W	\1
+	ENDM
+
+
+*****************************************
+*				*
+*	Les I/O minimum sur	TTY	*
+*				*
+*****************************************
+
+
+*	TTYIN	op1,op2
+*	car suiv dans op1, cc dans op2
+
+TTYIN	MACRO
+
+	XREF	LL_TTYI
+	JSR	LL_TTYI
+	MOVE.L	D0,\1
+	MOVE.L	A0,\2
+	ENDM
+
+*	TTYOUT	op1,adr,op2
+*	sort la chaine de taille 'op1' et 'adr'
+*	'op2' = cc
+
+TTYOUT	MACRO
+	MOVE.L	\1,D0	taille
+	LEA	\2,A0	adresse
+	XREF	LL_TTYO
+	JSR	LL_TTYO
+	MOVE.L	A0,\3
+	ENDM
+
+*	MSG	len,adr	sort le message
+*		qui est un operande	immediat
+
+MSG	MACRO
+	BRA.S	B\@
+M\@	DC.W	'\2'
+B\@	MOVE.L	#\1,D0	 taille
+	LEA	M\@,A0	adresse
+	JSR	LL_TTYO
+	ENDM
+
+*	MSGCRLF		retour chariot dans	MSG
+
+MSGCRLF	MACRO
+	BRA.S	B\@
+M\@	DC.W	$0D0A	peut etre	'common' ?!?!
+B\@	MOVE.L	#2,D0	taille
+	LEA	M\@,A0	adresse
+	JSR	LL_TTYO
+	ENDM
+
+*	SNAP len,adr,reg	permet de	visualiser un registre
+
+SNAP	MACRO
+	SECTION	15
+S\@	DC.W	'\2'
+R\@	DC.W	'\3'
+	SECTION	10
+	XREF	LL_TTYO,LL_TTYON
+	MOVE.L	#\1,D0	 taille
+	LEA	S\@,A0	adresse
+	JSR	LL_TTYO
+	MOVE.L	#2,D0	taille
+	LEA	R\@,A0	adresse
+	JSR	LL_TTYO
+	MOVE.L	\3,D0
+	JSR	LL_TTYON
+	ENDM
+
+
+     IFEQ	LINK		povre linker du SM90!
+
+BRA	MACRO
+	JMP	\1
+	ENDM
+
+BSR	MACRO
+	JSR	\1
+	ENDM
+
+     ENDC
+
+	LIST
+
+
+
+

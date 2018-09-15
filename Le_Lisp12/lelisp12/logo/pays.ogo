@@ -1,0 +1,182 @@
+pour toit
+
+av 26 td 90 av 26 td 45
+
+fin
+
+ 
+
+pour rect :a :b
+
+repete 2 [av :a td 90 av :b td 90]
+
+fin
+
+ 
+
+pour maison
+
+toit
+
+rect 24 36
+
+fixexy 24 (-20) rect 12 8
+
+fixexy 4 (-12) rect 8 8
+
+fixecap 0
+
+fin
+
+ 
+
+pour v
+
+tg 45 av 5 re 5
+
+td 90 av 5 re 5
+
+tg 45
+
+fin
+
+ 
+
+pour branche
+
+repete 2 [av 10 v]
+
+av 5 re 25
+
+fin
+
+ 
+
+pour arbre
+
+tg 60
+
+repete 6 [branche td 20]
+
+branche tg 60
+
+re 40
+
+fin
+
+ 
+
+pour tria :n
+
+repete 3 [av :n td 120]
+
+fin
+
+ 
+
+pour aile
+
+tria 8
+
+tria 6
+
+tria 4
+
+fin
+
+ 
+
+pour papillon
+
+td 60 aile
+
+td 180 aile
+
+fixecap 0 tg 15 av 4 re 4
+
+td 30 av 4 re 4
+
+td 135 tria 4
+
+fin
+
+ 
+
+pour buisson :l :a :p
+
+si :p = 0 alors [stop]
+
+tg :a av 2 * :l
+
+buisson :l :a :p-1
+
+re 2*:l td 2*:a av :l
+
+buisson :l :a :p-1
+
+re :l tg :a
+
+fin
+
+ 
+
+pour soleil
+
+repete 9 [av 8 re 8 td 90 repete 4 [av 2 td 10] tg 90]
+
+fin
+
+ 
+
+pour pays
+
+fixexy -8 (-8) fixecap 45
+
+maison
+
+fixexy -36 8-4)
+
+arbre
+
+fixexy 40 (-60)
+
+buisson 3 30 4
+
+fixexy -60 (-32) td 90 av 120 tg 90
+
+fixexy 48 24
+
+papillon
+
+fixexy -4 50 fixecap 0
+
+soleil
+
+legende
+
+fin
+
+ 
+
+pour legende
+
+fixecurseur 4 51 ecris "soleil
+
+fixecurseur 10 56 ecris "papillon
+
+fixecurseur 19 36 ecris "maison
+
+fixecurseur 20 16 ecris "arbre
+
+fixecurseur 21 65 ecris "buisson
+
+fin
+
+ 
+
+ 
+
+ 
+
+ 
+

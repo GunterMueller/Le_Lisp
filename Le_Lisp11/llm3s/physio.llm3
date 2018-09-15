@@ -1,0 +1,502 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :  I/O physiques et fichiers
+*
+****************************************************************
+*
+*                Jerome CHAILLOUX  (Chailloux.Vlsi)
+*                           I.N.R.I.A.
+*                Domaine de Voluceau,  Rocquencourt
+*                B.P. 105,   78153 Le Chesnay Cedex
+*                tel : (1) 954 90 20      poste 456
+*
+*****************************************************************
+ 
+ 
+          TITRE     PHYSIO       LLM3 : les I/O physiques
+ 
+ 
+          XREF      BUILDAT,CSYMB                 pour MAKFNT
+          XREF      .UNDEF,.T,.VOID
+          XREF      GC                            pour CONS
+ 
+          XREF      TRYATOM
+          XREF      ERRNLA,ERRNNA,ERRNAA,ERRIOS
+          XREF      IREAD,.CTRLZ
+          XREF      EVALA1,APPLY,DE
+          XREF      POPJ,FALSE,TRUE,REENTER
+ 
+          XDEF      INI_PIO             pour l'initialiseur
+          XDEF      INPUTI              ouverture fichir initial
+          XDEF      ISTREAM,OSTREAM
+          XDEF      INPHY
+ 
+ 
+          PURE
+ 
+ 
+*
+*         Initialise les I/O physiques
+*         ============================
+*
+ 
+INI_PIO   EQU       *
+          NOLIST
+ 
+          MOV       #0,PBUFTTY          raz index sur buffer TTY
+          MOV       #0,A1               index dans la ligne
+          MOVBX     #0,LIGNE,A1         rien dans la ligne
+*         pour tester le lecteur.
+*         MOVBX     #$28,LIGNE,A1        (
+*         INCR      A1
+*         MOVBX     #$29,LIGNE,A1	)
+*         INCR      A1
+*         MOVBX      #$28,LIGNE,A1
+*         INCR      A1
+*         MOVBX      #$28,LIGNE,A1
+*         INCR      A1
+*         MOVBX      #$29,LIGNE,A1
+*         INCR      A1
+*         MOVBX      #$29,LIGNE,A1
+*         INCR      A1
+*         MOVBX      #$54,LIGNE,A1
+*         INCR      A1
+*         MOVBX      #$20,LIGNE,A1
+*         INCR      A1
+*         MOVBX      #$0,LIGNE,A1
+          MOV       #0,POLIG            en debut de ligne
+          MOVNIL    ISTREAM             stream entree = console
+          MOVNIL    OSTREAM             stream sortie = console
+ 
+*                                       Creation des symboles
+ 
+          MAKFNT    TYI,0,.VOID,3,'TYI'
+          MAKFNT    TYO,0,.VOID,3,'TYO'
+          MAKFNT    TYOL,0,.VOID,4,'TYOL'
+          MAKFNT    TYFLUSH,0,.VOID,7,'TYFLUSH'
+          MAKFNT    INPUT,0,.VOID,5,'INPUT'
+          MAKFNT    INCHAN,0,.VOID,6,'INCHAN'
+          MAKFNT    OUTCHAN,0,.VOID,7,'OUTCHAN'
+          MAKFNT    LOAD,0,.VOID,4,'LOAD'
+          MAKFNT    LOADFILE,0,.VOID,8,'LOADFILE'
+          MAKFNT    OUTPUT,0,.VOID,6,'OUTPUT'
+          MAKFNT    LCLOSE,0,.VOID,5,'CLOSE'
+          MAKFNT    DELETFI,0,.VOID,10,'DELETEFILE'
+          MAKFNT    RENAMFI,0,.VOID,10,'RENAMEFILE'
+          MAKFNT    SAVECOR,0,.VOID,9,'SAVE-CORE'
+          MAKFNT    RESTCOR,0,.VOID,12,'RESTORE-CORE'
+*
+          RETURN
+          LIST
+ 
+*
+*         relais pour le LINK du SM90
+*
+ 
+LTRUE     BRA       TRUE
+ 
+*
+*         Fonctions sur le canal terminal
+*         ===============================
+*
+ 
+*----------------------------------------
+          FENTRY    TYI,SUBR0
+*----------------------------------------
+          TTYOUT    PBUFTTY,BUFTTY,A2   vide le tampon courant
+          MOV       #0,PBUFTTY          raz index sur le buffer TTY
+*          BFEQ.S    A2,#0,TYIERR        ca va pas!
+          TTYIN     A1,A2               sort le buffer courant et lit le car.
+          BFEQ.S    A2,#0,TYIERR        la non plus!
+          RETURN    *
+TYIERR    MOV       #0,PBUFTTY          raz index sur le buffer (on suppose)
+          MOV       A2,A1               le code erreur
+          MOV       .TYI,A2             nom de la fonction
+          BRA       ERRIOS              erreur I/O
+ 
+*----------------------------------------
+          FENTRY    TYO,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,TYOERR           il faut absolument un nb!
+TYOI      MOV       PBUFTTY,A4          charge l'index
+          CBLT.S    A4,#500,TYO1        ca rentre dans le buffer
+          TTYOUT    A4,BUFTTY,A2        vide le buffer
+          MOV       #0,A4               raz l'index
+*          BFEQ.S    A2,#0,TTYOERR       ca ne s'est pas bien passe!
+TYO1      LBYTE     A1,A3,TYO2          recup l'octet de gauche
+          MOVBX     A3,BUFTTY,A4        charge le car de gauche
+          INCR      A4                  actualise l'index
+TYO2      RBYTE     A1,A3,TYO3          recup l'octet de droite
+          MOVBX     A3,BUFTTY,A4        charge le caractere dans le buffer
+          INCR      A4                  actualise l'index
+TYO3      MOV       A4,PBUFTTY          sauve le nouvel index
+          RETURN
+TYOERR    MOV       .TYO,A2             nom de la fonction
+          BRA       ERRNNA
+ 
+TTYOERR   MOV       A2,A1               le code erreur
+          MOV       .TYO,A2             nom de la fonction
+          BRA       ERRIOS              erreur d'I/O
+ 
+*----------------------------------------
+          FENTRY    TYOL,SUBR1
+*----------------------------------------
+          MOV       A1,A2               ca facilite le retour
+          BRA.S     TYOL2               et on y va
+TYOL1     MOV       CAR(A2),A1          le caractere suivant
+          MOV       CDR(A2),A2          avance dans la liste
+          CALL      TYOI                sortie d'1 caractere (interne)
+TYOL2     BTCONS    A2,TYOL1            ca continue
+          BRA       TRUE                retourne toujours T
+ 
+*----------------------------------------
+          FENTRY    TYFLUSH,SUBR0
+*----------------------------------------
+          TTYOUT    PBUFTTY,BUFTTY,A2   vide le buffer
+          MOV       #0,PBUFTTY          raz l'index sur ce buffer
+*          BFEQ      A2,#0,TTYOERR       ca na va pas!
+          BRA       TRUE                et retourne toujours T.
+ 
+ 
+*
+*         INPHY  :   Acces au caractere physique en entree
+*         ================================================
+*         doit mettre dans A4 le caractere suivant.
+*
+ 
+INPHY     EQU       *
+          PUSH      A3
+          MOV       POLIG,A3            recup le pointeur de ligne
+          XMOVB     A3,LIGNE,A4         A4 <- le caractere
+          BTEQ.S    A4,#0,INPHYL        c'etait la fin de la ligne
+          INCR      A3                  actualise lepointeur de ligne
+          MOV       A3,POLIG            on le range
+          POP       A3                  et restaure A3
+          RETURN    *                   rapide non ?
+ 
+*         Lecture d'une nouvelle ligne
+ 
+INPHYL    EQU       *
+          PUSH      A2                  pour travailler
+          PUSH      A4                    et encore.
+          BTNUMB    ISTREAM,INCHF       lecture d'un fichier
+          TTYOUT    PBUFTTY,BUFTTY,A2   vide le tampon
+          BFEQ      A2,#0,TTYOERR       mauvaise ecriture
+          TTYOUT    #2,PTINT,A2         sort '? '
+          BFEQ      A2,#0,TTYOERR       erreur de sortie
+          MOV       #0,PBUFTTY          raz index buff TTY
+INPHY2    MOV       #0,A4               index sur la ligne
+INPHY3    TTYIN     A3,A2               lecture sur TTY
+          BFEQ      A2,#0,TYIERR        mauvaise lecture
+          MOVB      A3,BUFCH            sauve le caractere
+          CBEQ      A3,#8,INPHY6        back-space ?
+          CBEQ      A3,#$7F,INPHY6      rub-out ?
+          CBEQ      A3,#24,INPHY8       ctrl X (delete line)
+          CBEQ      A3,#$0D,INPHY9      return (fin de ligne)
+          CBLT.S    A3,#32,INPHY5       car control (echo a la dec)
+          TTYOUT    #1,BUFCH,A2         echo du caractere
+          BFEQ      A2,#0,TTYOERR       mauvaise sortie
+INPHY4    MOVBX     A3,LIGNE,A4         charge le car dans la ligne
+          INCR      A4                  incremente l'index
+          BRA       INPHY3              au suivant
+INPHY5    PUSH      A3                  sauve le caractere a echoer
+          PLUS      #64,A3              conversion en lettre capitale
+          MOVB      A3,BUFCH            range la capitale
+          TTYOUT    #2,CNTRL,A2         on la sort precedee du chapeau
+          BFEQ      A2,#0,TTYOERR       mauvaise sortie
+          POP       A3                  recupere le caractere a charger
+          BRA       INPHY4              vers le chargement normal
+INPHY6    BTEQ      A4,#0,INPHY3        on est deja en debut de ligne !
+          DECR      A4                  m.a.j. index sur la ligne
+          XMOVB     A4,LIGNE,A3         A3 <- le car precedent
+          CBLT.S    A3,#32,INPHY7       c'est un caractere control a effacer
+          TTYOUT    #3,PTRUB,A2         bs-sp-bs l'ancien caractere
+          BFEQ      A2,#0,TTYOERR       mauvaise sortie
+          BRA       INPHY3              caractere suivant
+INPHY7    TTYOUT    #6,PTRUB,A2         bs-sp-bs-bs-sp-bs (pour ^x)
+          BFEQ      A2,#0,TTYOERR       mauvaise sortie
+          BRA       INPHY3              caractere suivant
+INPHY8    TTYOUT    #5,PTCRX,A2         \ rc lf ? sp  (indic ligne detruite)
+          BFEQ      A2,#0,TTYOERR       mauvaise sortie
+          BRA       INPHY2              et re-init la ligne
+INPHY9    TTYOUT    #2,PTCRLF,A2        ecrit rc-lf
+          BFEQ      A2,#0,TTYOERR       mauvaise sortie
+INPHYC    MOVBX     A3,LIGNE,A4         force return
+          INCR      A4                  actualise l'index
+          MOVBX     #$0A,LIGNE,A4       force line-feed
+          INCR      A4                  actualise l'index
+          MOVBX     #0,LIGNE,A4         indique la fin du buffer
+          POP       A4                  restaure les 3 registres
+          POP       A2                  et encore.
+          POP       A3                  encore ...
+          MOV       #0,A4               index du 1er caractere
+INPHYEND EQU *
+          XMOVB     A4,LIGNE,A4         A4 <- le 1er caractere de la ligne
+          MOV       #1,POLIG            index courant sur la ligne
+          RETURN    *                   That's all folks
+ 
+*         Lecture d'une ligne sur fichier
+ 
+ XDEF INCHF
+INCHF     EQU       *
+          INBF      ISTREAM,LIGNE,A4,A3 lecture nouvelle ligne
+          BTEQ.S    A3,#0,INCHF1        tout s'est bien passe
+          MOVBX     #26,LIGNE,A4        force le car ^Z
+          INCR      A4                  m.a.j. A4
+INCHF1    MOV       #$0D,A3             pour forcer une fin de ligne.
+          BRA       INPHYC              et apres c'est pareil
+ 
+ 
+*
+*         Fonctions sur les fichiers
+*         --------------------------
+*
+ 
+*----------------------------------------
+          FENTRY    INPUT,SUBRV1
+*----------------------------------------
+          BFSTRG.S  A1,INPUT0
+          MOV       VAL(A1),A1
+INPUT0    BFSYMB    A1,INPUTER          il faut un symbole
+          BFEQ.S    ISTREAM,#0,INPUTI   si ce n'est pas deja un fichier
+          FCLOS     #0,A3               on ferme le fichier disque deja ouvert
+          BFEQ.S    A3,#0,INPUT7        erreur dans le CLOSE 0
+*
+*         Entree pour l'ouverture du fichier initial
+*
+INPUTI    EQU       *
+          BFNIL.S   A1,INPUT2           on ouvre un vrai fichier
+          MOVNIL    ISTREAM             indic console
+          BRA       TRUE                et retourne T
+INPUT2
+          INFILE    #0,A1,A1            ouverture canal 0
+          BFEQ.S    A1,#0,INPUT8        ya une erreur
+          MOV       #0,ISTREAM          indic fichier
+          BRA       TRUE                et retourne T
+INPUT7    MOV       A3,A1               A1 <- le code erreur
+INPUT8    MOV       .INPUT,A2           nom de la fonction
+          BRA       ERRIOS              erreur d'I/O
+INPUTER   MOV       .INPUT,A2           le nom
+          BRA       ERRNAA
+ 
+*
+*         (LOAD file)  FSUBR
+*
+ 
+*----------------------------------------
+          FENTRY    LOAD,SUBRF
+*----------------------------------------
+          BTEQ      ISTREAM,#1,LIBRAR8  LOAD in LOAD !
+          MOV       CAR(A1),A1          A1 <- le nom du fichier
+          BFSTRG.S  A1,LOAD0            traite le cas d'une chaine
+          MOV       VAL(A1),A1
+LOAD0     BFSYMB    A1,LOADER           ca va pas!
+          INFILE    #1,A1,A1            ouverture canal 1 (LOAD)
+          BFEQ      A1,#0,LIBRAR8       ya une erreur
+          PUSH      ISTREAM             sauve l'ancien indic
+          MOV       #1,ISTREAM          indic fichier LOAD
+LIBRAR1   CALL      IREAD
+          BTEQ.S    A1,.CTRLZ,LIBRAR2   c'est la fin de fichier
+          CALL      EVALA1
+          BRA.S     LIBRAR1
+LIBRAR2   FCLOS     #1,A1               on ferme le fichier.
+          POP       ISTREAM             revient sur le stream precedent
+          BTEQ      A1,#0,LTRUE         tout est OK
+*                                       LIBRAR8 doit suivre
+LIBRAR8   EQU       *                   si erreur
+          MOV       .LOAD,A2            nom de la fonction
+          BRA       ERRIOS              erreur d'I/O
+*
+LOADER    MOV       .LOAD,A2            le nom de la fonction
+          BRA       ERRNAA              il fallait un symbole
+ 
+*
+*         (LOADFILE file)   SUBR1
+*
+*----------------------------------------
+          FENTRY    LOADFILE,SUBR1
+*----------------------------------------
+          BTEQ.S    ISTREAM,#1,LIBRAR8  LOAD in LOAD
+          BFSTRG.S  A1,LOADF0           traite le cas d'une chaine
+          MOV       VAL(A1),A1
+LOADF0    BTSYMB    A1,LOAD0            apres c'est pareil
+          MOV       .LOADFILE,A2        la fonction qui ne va pas
+          BRA       ERRNAA              il fallait un symbole
+ 
+*
+*         (OUTPUT file)  SUBR1
+*
+*----------------------------------------
+          FENTRY    OUTPUT,SUBRV1
+*----------------------------------------
+          BFSTRG.S  A1,OUPUT0           traite le cas des chaines
+          MOV       VAL(A1),A1
+OUPUT0    BFSYMB    A1,OUTPER           il faut un symbole
+          BFEQ.S    OSTREAM,#0,OUPUT1   si ce n'est pas deja un fichier
+          FCLOS     #3,A3               on ferme le fichier disque deja ouvert
+          BFEQ.S    A3,#0,OUPUT7        le CLOSE a rate!
+OUPUT1    BFNIL.S   A1,OUPUT2           on ouvre un vrai fichier
+          MOVNIL    OSTREAM             indic console
+          BRA       TRUE                et retourne T
+OUPUT2    OUFILE    #3,A1,A1            ouverture canal 3 systematiquement
+          BFEQ.S    A1,#0,OUPUT8        ya une erreur
+          MOV       #0,OSTREAM          indic fichier
+          BRA       TRUE                et retourne T
+OUPUT7    MOV       A3,A1               le code d'erreur est dans A1
+OUPUT8    MOV       .OUTPUT,A2          nom de la fonction
+          BRA       ERRIOS              erreur d'I/O
+OUTPER    MOV       .OUTPUT,A2          le nom
+          BRA       ERRNAA
+ 
+*
+*         Fonctions sur les canaux
+*         ------------------------
+ 
+*         (INCHAN)
+ 
+*----------------------------------------
+          FENTRY    INCHAN,SUBR0
+*----------------------------------------
+          MOV       ISTREAM,A1          le canal d'entree courant
+          RETURN    *
+ 
+*         (OUTCHAN)
+ 
+*----------------------------------------
+          FENTRY    OUTCHAN,SUBR0
+*----------------------------------------
+          MOV       OSTREAM,A1          le canal de sortie courant
+          RETURN    *
+ 
+ 
+*
+*         Fonctions de manipulation des fichiers
+*         --------------------------------------
+*
+ 
+*         (CLOSE n)
+ 
+*----------------------------------------
+          FENTRY    LCLOSE,SUBR1
+*----------------------------------------
+          BFNUMB.S  A1,CLOSER1
+          FCLOS     A1,A1                         A1 code d'erreur
+          BTEQ      A1,#0,LTRUE
+          MOV       .LCLOSE,A2                    la fonction
+          BRA       ERRIOS                        erreur I/O
+CLOSER1   MOV       .LCLOSE,A2
+          BRA       ERRNNA
+ 
+ 
+*         (DELETEFILE file)
+ 
+*----------------------------------------
+          FENTRY    DELETFI,SUBR1
+*----------------------------------------
+          BFSTRG.S   A1,DELETF1                    traite le cas des chaines
+          MOV       VAL(A1),A1
+DELETF1   BFSYMB.S  A1,DELETER1
+          FDELE     A1,A1
+          BTEQ      A1,#0,LTRUE
+          MOV       .DELETFI,A2                   la fonction
+          BRA       ERRIOS                        erreur I/O
+DELETER1  MOV       .DELETFI,A2
+          BRA       ERRNAA
+ 
+*         (RENAMEFILE old new)
+ 
+*----------------------------------------
+          FENTRY    RENAMFI,SUBR2
+*----------------------------------------
+          BFSTRG.S  A1,RENAMF1                    traite le cas des chaines
+          MOV       VAL(A1),A1
+RENAMF1   BFSYMB.S  A1,RENAMER2
+          BFSTRG.S  A1,RENAMF2
+          MOV       VAL(A2),A2
+RENAMF2   BFSYMB.S  A2,RENAMER1
+          FRENA     A1,A2,A1
+          BTEQ      A1,#0,LTRUE
+          MOV       .RENAMFI,A2                   la fonction
+          BRA       ERRIOS                        erreur I/O
+RENAMER1  MOV       A2,A1
+RENAMER2  MOV       .RENAMFI,A2
+          BRA       ERRNAA
+ 
+ 
+*
+*         Fonctions de gestion de l'image memoire
+*
+ 
+*         (SAVE-CORE filename)
+ 
+*----------------------------------------
+          FENTRY    SAVECOR,SUBR1
+*----------------------------------------
+          BFSYMB.S  A1,SAVECERR         il faut vraiment un filename symbolique
+          CORSAV    A1,A1               retourne le CC
+          BTEQ      A1,#0,LTRUE         tout va bien
+          MOV       .SAVECOR,A2         la fonction
+          BRA       ERRIOS              erreur
+SAVECERR  MOV       .SAVECOR,A2
+          BRA       ERRNNA              il fallait un symbole
+ 
+*         (RESTORE-CORE filename)
+ 
+*----------------------------------------
+          FENTRY    RESTCOR,SUBR1
+*----------------------------------------
+          BFSYMB.S  A1,RESTCERR         il faut vraiment un symbole
+          COREST    A1,A1               retourne le CC
+          BTEQ      A1,#0,LTRUE         tout va bien
+          MOV       .RESTCOR,A2         la fonction
+          BRA       ERRIOS              erreur I/O
+RESTCERR  MOV       .RESTCOR,A2
+          BRA       ERRNNA              il fallait un symbole
+ 
+ 
+*
+*          Donnees utilisees pour les fichiers
+*         ------------------------------------
+*
+ 
+ 
+PTINT     ASCII     <'? '>                        ? sp
+PTCRX     BYTE
+          BYTE      $5C
+          BYTE      $0D
+          BYTE      $0A
+          BYTE      $3F
+          BYTE      $20
+          BYTE      $00                           \ cr lf ? sp
+PTCRLF    BYTE      $0D
+          BYTE      $0A                           cr lf
+PTRUB     BYTE      $08
+          BYTE      $20
+          BYTE      $08
+          BYTE      $08
+          BYTE      $20
+          BYTE      $08                           bs sp bs bs sp bs
+ 
+ 
+          IMPURE
+ 
+ 
+ISTREAM   ADR       0         NIL si entree console,
+*                             0 = entree fichier INPUT
+*                             1 = entree fichier LOAD
+*
+OSTREAM   ADR       0         NIL si sortie console
+*
+PBUFTTY   ADR       0         index sur le tampon suivant.
+BUFTTY    DSBYTE    512       buffer de 512 caracteres!
+*
+CNTRL     BYTE      $5E       le chapeau : l'octect suivant ne doit
+BUFCH     BYTE      0            pas changer de place !!!!
+*
+ XDEF LIGNE
+LIGNE     DSBYTE    128       ligne en entree (144 caracteres)
+POLIG     ADR       0         pointeur sur cette ligne.
+*
+ 
+          END
+ 

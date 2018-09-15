@@ -1,0 +1,31 @@
+Ce repertoire contient l'incarnation du systeme Le_Lisp
+sur MC68000 (Le_Lisp 68K) :
+
+    condit.sa	les conditionnels de l'assemblage 68K
+    macros.sa	la definition des macros standard
+    macgc.sa	la definition des macros du GC
+    macio.sa   	la definition des macros des I/O
+
+    rtllm3.sa	le "run-time" LLM3 pour MC68000
+
+pour la version EXORmacs (VERSAdos) :
+
+    lelisp.pascal	le lanceur pascal
+    llvsdos.sa	les interfaces systeme avec VERSAdos
+
+    llasm.cf	le 'chain file' d'assemblage
+    llinkvd.cf	le link sur Versados
+    llinkvm.cf       le link sur Versamodule
+    toutvd.cf        la fabrication complete sur Versados
+
+    lelisp.map	la map de la version VERSAdos
+
+pour la version SM90 (UNIX) :
+
+    llunix.sa	les interfaces systeme UNIX SM90
+
+    macro.c	l'expanseur de macros ecrit par O'Donnell et Zohra
+    motmit.c	la traducteur assembleur motorola -> assembleur UNIX
+		ecrit egalement par Ciaran et Zohra		
+    Makefile	le make du systeme entier.
+

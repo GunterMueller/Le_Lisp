@@ -1,0 +1,549 @@
+************************************************************
+*						*
+*		L E    L I S P    6 8 K		*
+*		  systeme  UNIX 		*
+*						*
+*************************************************************
+*						*
+*		  Jerome	 CHAILLOUX		*
+*						*
+*		  I . N . R . I . A .		*
+*	     Domaine de Voluceau, Rocquencourt		*
+*	     B.P. 105   78153 Le Chesnay Cedex		*
+*	     Tel : (1) 954 90 20   poste 456		*
+*						*
+*************************************************************
+
+
+	TTL	LE Lisp 68K, by Jerome Chailloux.
+
+LLUNIX	IDNT	1,1	ASM : racine assembleur.
+
+	NOLIST
+
+*========================================
+*	Les sections utilisees
+*========================================
+
+*	SECTION	8	RO	reservee pour Pascal
+*	SECTION	9	RO	modules assembleurs
+*	SECTION	10	RO	modules Le_Lisp
+*	SECTION	11	RO	le noyau de l'interprete
+*
+*	SECTION	14	RW	donnees NON sauvees par SAVE-CORE
+*	SECTION	15	RW	donnees sauvees par SAVE-CORE
+
+
+*************************************************************
+*						*
+*	Appel principal de LL68K (direct de Pascal)	*
+*						*
+*************************************************************
+
+	SECTION	9		pour PASCAL
+
+	XDEF	LL68K
+
+LL68K	JMP	LL68KGO
+	NOP
+
+	SECTION	10		monde de Lisp
+
+	XDEF	LL68KGO
+	XREF	REENTER,THEEND	in LLINIT (LLM3)
+
+LL68KGO	EQU	*
+	BRA	LL68KC		Cold start
+	BRA	REENTER		Warm start
+	BRA	THEEND		Stupid start
+
+LL68KC	EQU	*
+	BRA	SYSINI
+
+*
+*	chargement du module dependant du systeme :
+*		 - de point d'entree : SYSINI
+*		 - il doit revenir au moyen d'un BRA LLINIT
+*
+*	au retour, les mots suivants sont charges :
+*		SMEMI SCODE SARRAY SSTRG SSYMB SCONS (toutes les tailles)
+*		BMEMI (l'adresse de la 1ere zone)
+*		(tous les autres mots seront initialises par LLINIT)
+*
+*
+*
+*	Les points d'entree suivants seront definis :
+*	tous retournent en general dans A0 un code erreur (cc)
+*	cc = 0 indique que tout s'est bien passe
+*
+
+	SECTION	10
+
+*	initialise le canal terminal (cc = 0)
+
+	XDEF	LL_TTY
+
+*	retourne le caractere lu suivant dans D0 (cc dans A0)
+
+	XDEF	LL_TTYI
+
+*	imprime la chaine de taille D0 et d'adresse A0 (cc = A0)
+
+	XDEF	LL_TTYO
+
+*	ouvre un fichier en entree de nom A0 et de taille D0
+*	sur le canal de numero D1 (cc = A0)
+
+	XDEF	LL_OPI
+
+*	ouvre un fichier en sortie de nom A0 et de taille D0
+*	sur le canal D1 (cc = A0)
+
+	XDEF	LL_OPO
+
+
+*	lit dans le tampon d'adresse A0 la ligne suivante du canal D1
+*	(D0 = le nombre de caracteres transferes, cc = A0)
+
+	XDEF	LL_IBC
+
+*	imprime la chaine d'adresse A0 et de taille D0
+*	sur le canal de numero D1 (cc = A0)
+
+	XDEF	LL_SFO
+
+*	ferme le canal de numero D1  (cc = A0)
+
+	XDEF	LL_CLO
+
+*	detruit le fichier de nom A0 de taille D0 (cc = A0)
+
+	XDEF	LL_DEL
+
+*	renomme le fichier de nom A0 -> dans le nom D0 (cc = A0)
+
+	XDEF	LL_REN
+
+*	sauve une image memoire de nom A0 et de taille D0 (cc = A0)
+
+	XDEF	LL_CORSAV
+
+*	restaure une image memoire de nom A0 et de taille D0 (cc = A0)
+
+	XDEF	LL_COREST
+
+*	retourne au systeme hote
+
+	XDEF	LL_EXIT
+
+
+*
+*	Debut de la zone impure qui sera sauvee par SAVE-CORE
+*
+
+	SECTION 15
+
+.BIMPUR	EQU	*
+	DC.W	28,'**** Debut de la zone SW ****'
+
+*
+*	La pile Le_Lisp 68K
+*
+
+.ESTACK	DS.L	64		tolerance pile
+.MSTACK	DS.L	4000		fin a tester de la pile
+.BSTACK	DC.L	0		fond de la pile.
+
+
+	PAGE
+
+***********************************************************************
+*								      *
+*	L E   L I S P   6 8 K   :   les interfaces UNIX SM90	      *
+*							  	      *
+***********************************************************************
+
+*================================================
+*	Taille de la zone dynamique
+*================================================
+
+.SMEMI	EQU	0*1024		pour la memoire image
+.SCODE	EQU	6*1024		pour le binaire
+.SARRAY	EQU	1*1024		pour les tableaux de pointeurs
+.SSTRG	EQU	4*1024		pour les chaines
+.SSYMB	EQU	64*1024		pour les symboles
+.SCONS	EQU	196*1024	pour les CONS
+
+
+	SECTION	15		on manque pas d'air .....
+
+
+	SECTION	10		le code !
+
+*============================================================
+*	Les  EQU	de  UNIX
+*============================================================
+
+UNIX	EQU	0	numero du TRAP
+IOCTL	EQU	54	controle du terminal  ?!?!?!
+READ	EQU	3	lecture de caracteres ?!?!?!
+WRITE	EQU	4	ecriture de caractere ?!?!?!
+OPEN	EQU	5
+CLOSE	EQU	6
+CREATE	EQU	8
+STDIN	EQU	0	numero du fd d'entree
+STDOUT	EQU	1	numero du fd de sortie
+TIOCGETP EQU 	29696+8
+TIOCSETP EQU	29696+9
+
+*------------------------------------------------------------
+
+*	Appel de UNIX
+
+UNIX	MACRO
+	MOVE.L	\1,D0	le numero de la requete
+	CLR.L	-(SP)	il faut un dummy dit Ciaran ...
+	TRAP	\#0	et voila
+	ADD.L	\#\2*4+4,SP
+	ENDM
+
+*	Restauration du contexte Le_Lisp
+
+LL_RES	MACRO
+	MOVEM.L	(A7)+,A1-A6/D3-D7
+	ENDM
+
+
+*	Sauvegarde du contexte Le_Lisp
+
+LL_SAV	MACRO
+	MOVEM.L	A1-A6/D3-D7,-(A7)
+	ENDM
+
+	SECTION	10		code pure
+
+
+*
+*	LL_TTY/TYI/TYO  : gestion du terminal
+*	=====================================
+*
+
+*	LL_TTY  :  initialise le canal TTY, retourne un code d'erreur
+*	en fait toujours 0 (i.e. OK)
+
+LL_TTY	EQU	*
+	LL_SAV			mode UNIX
+	PEA	ARGP		
+	MOVE.L	\#TIOCGETP,-(SP)
+	MOVE.L	\#STDIN,-(SP)
+	UNIX	\#IOCTL,3	vers le GET IOCTL
+	LEA	ARGP,A0		pour le sauver
+	LEA	ARGP+8,A1	adresse de la sauvegarde
+	MOVE.L	(A0)+,(A1)+	les 4 octets
+	MOVE.L	(A0),(A1)	et les flags
+	AND.W	\#$FFF7,(A0)	force -ECHO
+	OR.W	\#2,(A0) 	force CBREAK
+	PEA	ARGP
+	MOVE.L	\#TIOCSETP,-(SP)
+	MOVE.L	\#STDIN,-(SP)
+	UNIX	\#IOCTL,3	vers le SET IOCTL
+	MOVE.L	\#0,A0		tout va bien
+	LL_RES
+	RTS			et pour cause !!
+
+*	LL_TTYI  : retourne dans D0 le caractere suivant
+*		   et dans A0 le code erreur.
+
+
+
+LL_TTYI	EQU	*
+	LL_SAV			passe en mode non-lisp
+	MOVE.L	\#1,-(SP)	nombre de caracteres a lire
+	PEA	BUFUX		buffer d'un mot pour UNIX
+	MOVE.L	\#STDIN,-(SP)	numero de fd d'entree
+	UNIX	\#READ,3		et D0 est positionne (merci UNIX)
+	MOVE.B	BUFUX,D0
+	AND.L	\#$7F,D0		enleve la PTY
+	CMP.L	\#$0A,D0
+	BNE.S	TYIII
+	MOVE.L	\#$0D,D0
+TYIII	MOVE.L	\#0,A0		code erreur = 0 (toujours OK)
+	LL_RES			repasse en mode lisp
+	RTS
+
+*	LL_TTYO  :  sort la chaine pointee pas A0 de taille D0
+*		    retourne dans A0 le cc
+
+LL_TTYO	EQU	*
+	TST.L	D0		la taille de la chaine.
+	BEQ.S	LL_TYO9		la chaine vide ne fait rien
+	LL_SAV			passe en mode non-lisp
+	MOVE.L	D0,-(SP)	empile la taille de la chaine
+	MOVE.L	A0,-(SP)	empile l'adresse de la chaine
+	MOVE.L	\#STDOUT,-(SP)	empile le numero du canal de sortie
+	UNIX	\#WRITE,3	c'est parti et D0 contient le cc!
+	MOVE.L	\#0,A0		c'est plus sur!!!
+	LL_RES			retourne en mode lisp
+LL_TYO9	RTS
+
+
+*
+*	LL_OPI : ouvre un fichier disque de nom (chaine) A0 - D0
+*		D1 contient le numero du canal
+*		retourne dans A0 le cc !
+*
+
+LL_OPI	EQU	*
+	LL_SAV
+	MOV	D1,CANAL	sauve le fildesc
+	LEA	TAMPON,A1	copie dans TAMPON la chaine
+	BRA	OPPI2		terminee par un  NULL!
+OPPI1	MOVE.B	(A0)+,(A1)+
+OPPI2	DBRA	D0,OPPI1
+	CLR.B	(A1)+
+	CLR.L	-(A7)		type = 0 READ
+	PEA	TAMPON
+	UNIX	\#OPEN,2
+	CMP.L	\#$FFFFFFFF,D0	ok ?
+	BNE.S	OPI1		oui
+	MOVE.L	\#1,A0
+	BRA.S	OPI9
+OPI1	MOV	D0,D1		a cause du MOVX
+	MOVX	D1,FILTAB,CANAL	sauve le fildesc
+	MOV	\#0,A0		cc = ok!
+OPI9	LL_RES
+	RTS
+
+*
+*	LL_OPO : ouvre un fichier disque en sortie
+*	A0 adresse de la chaine file-name, D0 le nb de caracteres
+*	D1 le numero de canal. Retourne A0 = cc
+*
+
+LL_OPO	EQU	*
+	LL_SAV
+	LEA	TAMPON,A1
+	BRA.S	OPPO2
+OPPO1	MOVE.B	(A0)+,(A1)+
+OPPO2	DBRA	D0,OPPO1
+	CLR.B	(A1)+
+	PUSH	\#$1B6		0666 en octal !!!!
+	PEA	TAMPON
+	UNIX	\#CREATE,2
+	MOVE.L	\#0,A0		cc = ok
+	MOVE.L	D0,FIL2		le fildes
+	CMP.L	\#$FFFFFFFF,D0	ok ?
+	BNE.S	OPO1
+	MOVE.L	\#1,A0
+OPO1	LL_RES
+	RTS
+
+*
+*	LL_IBC : lecture de la ligne suivante du fichier
+*		D1 contient le numero de canal,
+*		A0 contient l'adresse du buffer ou se trouvera la ligne.
+*	A0 = cc, D0 = le nb de caracteres!
+*
+
+LL_IBC	EQU	*
+	LL_SAV
+	PUSH	A0		pour le compte
+	PUSH	A0		(a cause du XMOV)
+	XMOV	D1,FILTAB,FLDESC sauve le fildesc
+	POP	A0		(cf *-2)
+LL_IBC1	PUSH	A0		l'adresse actuelle du tampon
+	PUSH	\#1		n
+	PUSH	A0		buffer
+	PUSH	FLDESC		sauve le fildesc
+	UNIX	\#READ,3
+	POP	A0		l'adresse actuelle du tampon
+	CBNE	D0,\#1,LL_IBC3   il y a une erreur
+	CMP.B	\#$0A,(A0)+	lf ?
+	BNE	LL_IBC1
+	TST.B	-(A0)
+LL_IBC2	MOVE.L	A0,D0	pour le calcul
+	POP	D1	l'adresse du debut
+	SUB.L	D1,D0	D0 la taille
+ 	MOVE.L	\#0,A0	cc
+	LL_RES
+	RTS
+LL_IBC3	MOVE.B	\#$1A,(A0)+	Fin Fichier
+	BRA	LL_IBC2
+
+
+*
+*	LL_SFO : sort une chaine pointee par A0 et D0
+* 		 sur un canal de numero D1
+*
+
+LL_SFO	EQU	*
+	LL_SAV
+	PUSH	D0		la taille
+	PUSH	A0		l'adresse
+	PUSH	FIL2		le canal
+	UNIX	\#WRITE,3	roulez!
+	MOV	\#0,A0		c'est plus sur
+	LL_RES
+	RTS
+
+*
+*	LL_CLO : ferme un canal (numero dans D0)
+*
+
+LL_CLO	EQU	*
+	LL_SAV
+	XMOV	D1,FILTAB,A1
+	PUSH	A1
+	UNIX	\#CLOSE,1
+	MOV	D0,A0		le cc!
+	LL_RES
+	RTS
+
+*
+*	LL_DEL : detruit le fichier de nom A0
+*
+
+LL_DEL	EQU	*
+	MOVE.L	\#$FFFF,A0
+	RTS
+
+*
+*	LL_REN : renomme un fichier de nom A0 -> D0
+*
+
+LL_REN	EQU	*
+	MOVE.L	\#$FFFF,A0
+	RTS
+
+*
+*	LL_CORSAV  :  sauve une image memoire dans le fichier A0
+*
+
+LL_CORSAV EQU	*
+	MOVE.L	\#$FFFF,A0
+	RTS
+
+*
+*	LL_COREST  :  restaure une image memoire dans le fichier A0
+*
+
+LL_COREST EQU	*
+	MOVE.L	\#$FFFF,A0
+	RTS
+
+*
+*	LL_EXIT		retour au systeme hote
+*
+
+LL_EXIT	EQU	*
+	MOVEM.L	A1-A6/D1-D7,-(A7)
+*	LL_SAV
+	PEA	ARGP+8		la sauvegarde
+	MOVE.L	\#TIOCSETP,-(SP)
+	MOVE.L	\#STDIN,-(SP)
+	UNIX	\#IOCTL,3	vers le SET IOCTL
+	CLR.L	-(SP)
+	UNIX	\#1,1		pour sortir
+*	on ne doit jamais arriver ici !!!!
+
+
+*
+*	Traitement des TRAPs
+*
+
+RPOPJ	RTE
+
+*
+*	J'arrive en direct de LL68K !
+*
+
+*	MOVEQ	\#15,D0		code du TERMINATE
+*	TRAP	\#1		tout est dit.
+
+
+***************************************************
+*
+*	VRAI DEPART sous UNIX
+*
+***************************************************
+
+	XREF	SMEMI,SCODE,SARRAY,SSTRG,SSYMB,SCONS
+	XREF	BMEMI,STOTAL,DTOTAL
+	XREF	BSTACK,MSTACK,ESTACK
+
+SYSINI	EQU	*
+
+*	Initialisation de la pile
+
+	MOVE.L	\#.BSTACK,BSTACK
+	MOVE.L	\#.MSTACK,MSTACK
+	MOVE.L	\#.ESTACK,ESTACK
+
+	MOVE.L	\#.BSTACK,A7	la pile Le_Lisp
+
+*	Initialisation des tailles/adresses des zones
+
+
+	PUSH	\#.SMEMI+.SCODE+.SARRAY+.SSTRG+.SSYMB+.SCONS
+	XREF	_MALLOC
+	JCALL	_MALLOC
+	POP	A0		le PUSH du haut
+	MOVE.L	D0,SMEMI
+	
+*	MOVE.L	\#.SMEMI,SMEMI
+	MOVE.L	\#.SCODE,SCODE
+	MOVE.L	\#.SARRAY,SARRAY
+	MOVE.L	\#.SSTRG,SSTRG
+	MOVE.L	\#.SSYMB,SSYMB
+	MOVE.L	\#.SCONS,SCONS
+
+
+*	Initialisation du canal terminal
+
+	BSR      LL_TTY
+     IFNE DEBUG
+	MSG      6,< INIT >
+     ENDC
+
+*	Initialisation du fichier initial
+
+	XREF	FILIN,FILIZ
+
+SSTART8	CLR.L	FILIN
+	CLR.L	FILIZ
+
+SSTART9	EQU	*
+
+
+	BRA	LLINIT		retour au module commun LLM3
+
+	NOP			?!?!?!
+
+	SECTION	15
+
+	XDEF	LEL_A7
+LEL_A7	DC.L	0
+
+BUFUX	DC.L	0	buffer UNIX de lecture d'1 caractere
+
+ARGP	EQU	*
+	DS.B	16	pour l'IOCTL
+	DC.L	0	one for the pot
+
+      XDEF FIL0
+
+	XDEF	FILTAB
+FILTAB	EQU	*
+
+FIL0	DC.L	0	input
+FIL1	DC.L	0	library
+FIL2	DC.L	0	output
+
+CANAL	DC.L	0	le canal courant
+FLDESC	DC.L	0	le fildesc courant en entre
+
+*	tampon pour les chaines UNIX
+
+TAMPON	DS.L	20     
+
+

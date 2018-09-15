@@ -1,0 +1,332 @@
+****************************************************************
+*
+*       Le_Lisp  LLM3  :  runtime de LLM3 pour 68000
+*
+****************************************************************
+*
+*	       Jerome CHAILLOUX  (Chailloux.Vlsi)
+*		        I.N.R.I.A.
+*	       Domaine de Voluceau,  Rocquencourt
+*	       B.P. 105,   78153 Le Chesnay Cedex
+*	       tel : (1) 954 90 20	  poste 456
+*
+*****************************************************************
+
+	XREF	GC,FSTRG
+	XREF	ITSOFT
+	XREF	PROBJ,PROBJT
+	XREF	.UNDEF
+	XREF	HASHMAX,HASHTAB	gestion du hache (in LLINIT)
+	XREF	MAXBUCKET
+	XREF	CSYMB		courant atome!
+	XREF	CPKGC		courant 'package cell'
+	XREF	OBASE		base de sortie courante
+
+	XDEF	BUILDAT
+	XDEF	GETPNAM,TRYATOM
+	XDEF	CRASTRG
+
+*
+*   La fonction de hachage utilisee pour la table des symboles es :
+*	PLEN.W + PNAME(0).W + PNAME(2).W  modulo MAXBUCKET
+*
+
+	SECTION	10
+
+*
+*	Acces au P-name d'un atome :
+*	A0 <- adresse d'un buffer, D0 <- l'index, A1 <- atome
+*	termine le tampon A0 par un caractere null! 00 (Merci UN*X)
+*	retourne dans D1 le plen de A1
+*	Ne doit pas toucher a A1 !
+*
+
+GETPNAM	EQU	*
+*	calcul de la veritable adresse.
+	ADD.L	D0,A0		Adresse reelle du buffer.
+	BTNUMB.S	A1,GETPN2 	ca special des nbs
+	BFSTRG.S	A1,GETPN0
+	MOVE.L	(A1),A1		recup la chaine
+	BRA	GETPNAM
+GETPN0	PUSH	A1		pour le rendre propre.
+	GPLEN	A1,D1		nb de caracteres a transferer
+	ADD	\#PNAME,A1 	A1 pointe sur le Pname
+	BRA.S	GETPN11		traite le cas 0 caractere
+GETPN1	MOVE.B	(A1)+,(A0)+	transfert le caractere
+GETPN11	DBRA	D1,GETPN1 	ca roule
+	CLR.B	(A0)+		et termine par un 0!
+	POP	A1		et on le rend super clean!
+	CLR.L	D1		clean, clean ...
+	MOVE.W	PLEN(A1),D1	il le faut!
+	RETURN
+GETPN2
+	PUSH	\#-1		marque de fin de digits
+	CLR.L	D1		ce sera le PLEN
+	MOVE.L	A1,D2		pour faire les calculs
+	EXT.L	D2		etend le signe
+	BPL.S	GETPN3		c'est positif
+	MOVE.B	\#$2D,(A0)+	force un "-"
+	ADDQ	\#1,D1		compte le pname
+	NEG.L	D2		pour l'edition
+GETPN3	MOVE.L	OBASE,D0		la base courante
+	DIVS	D0,D2		D2 = rem::quo
+	MOVE.L	D2,D0		le temps de recup le reste
+	SWAP	D2		D2 = quo::rem
+	AND.L	\#$1F,D2		pour etre sur qu'il ne reste pas des ..
+	ADD	\#$30,D2		conv bin -> ascii
+	CBLE.S	D2,\#$39,GETPN4	c'est un chiffre
+	ADD	\#7,D2		passage en lettre
+GETPN4	PUSH	D2		sauve le car dans la pile
+	ADDQ	\#1,D1		compte le PLEN
+	MOVE.L	D0,D2		recup rem::quo
+	AND.L	\#$FFFF,D2 	isole le quotient
+	BNE.S	GETPN3		il faut encore diviser
+GETPN6	POP	D0
+	CMP.L	\#-1,D0		c'est le marqueur ?
+	BEQ.S	GETPN9		oui : fin
+	MOVE.B	D0,(A0)+
+	BRA.S	GETPN6
+GETPN9
+	RETURN	*		la c'est tout
+
+*
+*	Allocation d'un symbole (TRYATOM, MAKSTRG)
+*
+
+ALATOM	EQU	*
+	MOV	.UNDEF,A2 	CVAL par defaut
+	MOV	A2,(A0)+		force la CVAL
+	MOVNIL	(A0)+		PLIST=NIL
+	CLR.L	(A0)+		FVAL=0
+	MOVE.L	CPKGC,(A0)+	PKGC = le courrant
+	CLR.L	(A0)+		ALINK=0
+	CLR.W	(A0)+		PTYPE+FTYPE=0
+	MOVE.L	TSYMB,D0		taille de l'atome
+	MOVE.W	D0,(A0)+		PLEN
+	BEQ.S	ALATO9		c'est la symbole vide!
+	SUBQ	\#1,D0		a cause de ce foutu DBRA
+	MOVE.L	ASYMB,A5		adresse du buffer
+ALATO1	MOVE.B	(A5)+,(A0)+
+	DBRA	D0,ALATO1 	pour tous les caracteres
+*	ajustement et fill avec des 0
+	BRA.S	ALATO3
+ALATO2	CLR.B	(A0)+		filling avec des espaces
+ALATO3	MOVE.L	A0,D0		pour faire le test
+	AND.L	\#$3,D0		frontiere de double mot ?
+	BNE.S	ALATO2		non continue le filling
+ALATO9	MOVE.L	A0,ZSYMB		sauve le 1er mot libre de la zatom
+	RTS
+
+*
+*	CRASTRG : farbrique une chaine.
+*	pas tres fameux actuellemenent ?!?!?!
+*	D0 <- la taille, A0 <- l'adresse du buffer
+*	retourne dans A1 un pointeur sur la chaine.
+*
+
+CRASTRG
+	MOVE.L	D0,TSYMB		range la taille de l'atome
+	MOVE.L	A0,ASYMB		range l'adresse du buffer
+	MOV	CSYMB,A0		recup l'adresse 'current atom'
+	PUSH	A0		qui sera l'adresse du nouvel atome
+	BSR	ALATOM
+	POP	A0
+	PUSHAD	CRASTR2		la continuation
+	PUSH	A0
+	BRA	CRATOM
+CRASTR2	MOVE.L	FSTRG,A0		recupere le pointeur FREE STRING
+	MOVE.L	(A0),D0		le nouveau pointeur
+	MOVE.L	A1,(A0)		force le pointeur de chaine.
+	MOVE.L	A0,A1		c'est la valeur retournee!
+	MOVE.L	D0,FSTRG		nouveau FREE
+	RTS			et c'est tout.
+
+*
+*	INTERN un atome :
+*	D0 <- la taille, A0 <- l'adresse du buffer
+*
+
+TRYATOM	EQU	*
+	MOVE.L	D0,TSYMB		range la taille de l'atome
+	MOVE.L	A0,ASYMB		range l'adresse du buffer
+	MOV	CSYMB,A0		recup l'adresse 'current atom'
+	PUSH	A0		qui sera l'adresse du nouvel atome
+	BSR	ALATOM		alloue un nouveau symbole
+
+*	Essai de conversion numerique
+
+	TOPST	A1		A1 <- l'atome a convertir
+	CLR.L	D0		D0 sera la taille
+	CLR.L	D2		D2 pour travailler
+	MOVE.W	PLEN(A1),D0	  mais ce n'est pas tout :
+	SUBQ	\#1,D0		  pour le DBRA!
+	ADD.L	\#PNAME,A1 	A1 pointe sur le Pname
+	CLR.L	D1		accu = 0
+	MOVE.L	\#0,A5		signe = positif
+	MOVE.B	(A1)+,D2		le 1er caractere
+	CMP.B	\#$2D,D2		signe '-' ?
+	BNE.S	CRATO3		nan.
+	MOVE.L	\#1,A5		indic nb negatif
+	DBRA	D0,CRATO2 	il faut + d'1 caractere num.
+	BRA.S	CRATOM		donc vers les symboles
+CRATO2	MOVE.B	(A1)+,D2		le caractere suivant du pname
+CRATO3	CMP.B	\#$30,D2		test par rapport a '0'
+	BLT.S	CRATOM		rate!
+	CMP.B	\#$39,D2		par rapport a '9'
+	BGT.S	CRATOM		encore rate!
+	SUB.B	\#$30,D2		pour le Horner
+	MULS	\#10,D1		accu=accu*10
+	ADD	D2,D1		accu=(accu*10)+car
+	DBRA	D0,CRATO2 	pour tous les digits
+	CMP	\#0,A5		test du signe
+	BEQ.S	CRATO4		c'est positif
+	NEG.L	D1		change de signe l'accu
+CRATO4
+	CRANB	D1,A1		devient un pointeur lisp
+	POP	A5		nettoie la pile
+	RETURN	*		Voila
+
+*	Test de l'existence de l'atome
+
+CRATOM
+	TOPST	A1		adresse de l'atome a tester
+*	la fonction de hachage
+*	TRUC A SAVOIR : si un debordement se produit durant la
+*	division, l'operande destination est inchange!!!!!
+*	l'indicatlement positionne.
+*	Il faut donc s'assurer que ce cas ne se produit jamais.
+	CLR.L	D0		pour eviter les debordements
+	MOVE.W	PLEN(A1),D0	PNAM(0).L + PLEN.W
+	CMP.W	\#3,D0		plus de 3 caracteres
+	BGE.S	CRAHA1		oui
+	ADD.W	PNAME(A1),D0	PNAM(0).W
+	BRA.S	CRAHA7
+CRAHA1	CMP.W	\#5,D0		plus de 5 caracteres
+	BGE.S	CRAHA2		oui
+	ADD.W	PNAME(A1),D0	PNAM(0).W
+	ADD.W	PNAME+2(A1),D0	PNAME(2).W
+	BRA.S	CRAHA7
+CRAHA2	ADD.W	PNAME(A1),D0	PNAM(0).W
+	ADD.W	PNAME+2(A1),D0	PNAME(2).W
+	ADD.W	PNAME+4(A1),D0	PNAME(4).W
+CRAHA7	EQU	*
+*	DIVU	\#MAXBUCKET,D0	D0 <- (rem . quo)
+	DIVU	\#263,D0
+	SWAP	D0		D0 <- (quo . rem)
+	AND.L	\#$FFFF,D0 	pour ne garder que le rem
+	LSL.W	\#2,D0		adresse de .L
+	LEA	HASHTAB,A5	adresse de la table de hachage
+	LEA	(A5,D0.W),A5	adresse de l'element
+	MOV	A5,HSYMB		pour le snap final
+	MOV	(A5),A5		A5 <- le contenu du bucket
+	MOV	A5,YSYMB		avant dernier pour le snap!
+	BRA	CRATO12		et on demarre sur le test de fin.
+CRATO6
+	TOPST	A1		adresse de l'atome a tester
+	PUSH	A5		sauve l'atome courant
+	MOVE.W	PLEN(A1),D0	PLEN de l'atome a tester
+	CMP.W	PLEN(A5),D0	identique a celui de l'atome courant ?
+	BNE.S	CRATO8		nan : je passe au suivant.
+	SUBQ	\#1,D0		a cause du DBRA
+	LSR.W	\#1,D0		passage en .W
+	ADD.L	\#PNAME,A1 	pointe sur le PNAME
+	ADD.L	\#PNAME,A5 	itou
+CRATO7	CMPM.W	(A1)+,(A5)+	test d'1 caractere
+	BNE.S	CRATO8		rate, au suivant.
+	DBRA	D0,CRATO7 	pour tous les caracteres
+*!!!	MSG	4,< OK >
+	POP	A1		le courant = la valeur retournee.
+	POP	A5		nettoie la pile
+	MOV	YSYMB,A5		le precedent
+	CMP.L	A1,A5		c'est le meme (le 1er de l'oblist)
+	BEQ.S	CRATA9		oui on se casse
+	MOV	ALINK(A1),ALINK(A5) SNAP!
+	MOV	HSYMB,A5		HASH-TABLE!
+	MOV	(A5),ALINK(A1)	OBLIST!
+	MOV	A1,(A5)		DONE!
+CRATA9	RETURN			et voila
+CRATO8
+	POP	A5		recup adresse courante
+	MOV	A5,YSYMB		sauve le precedent (pour le SNAP)
+	MOV	ALINK(A5),A5	atome suivant
+*	?!?!?! IL faut faire le test explicitement!
+CRATO12	CMP.L	\#0,A5
+	BNE.S	CRATO6		vers le test
+
+*!!!	MSG	4,< KO >
+	MOVE.L	ZSYMB,CSYMB	adresse de la fin de la zone atome
+	POP	A1		adresse  du nouvel atome
+	MOVE.L	HSYMB,A5		adresse du dernier atome
+	MOVE.L	(A5),ALINK(A1)	cre le nouveau lien
+	MOVE.L	A1,(A5)		nouvel at = dernier atome
+	RETURN
+*
+
+*
+*	BUILDAT : construit ALINK+*TYPE+PLEN+PNAME d'un atome
+*	A0 = pointeur sur la zone atome sur le ALINK
+*	D2 = l'adresse du debut de cet atome
+*
+
+BUILDAT	EQU	*
+	MOVE.L	(A7)+,A1		adresse des arguments
+*	fonction de hachage : meme remarque que precedement
+	CLR.L	D1		pour eviter les debordements
+	MOVE.W	2(A1),D1		PLEN.W
+	BEQ.S	BUILD1		la taille = 0, bucket = 0
+	CMP.W	\#3,D1		plus de 3 caracteres
+	BGE.S	BUILDHA1		oui
+	ADD.W	4(A1),D1		PNAM(0).W
+	BRA.S	BUILDHA7
+BUILDHA1	CMP.W	\#5,D1		plus de 5 caracteres
+	BGE.S	BUILDHA2		oui
+	ADD.W	4(A1),D1		PNAM(0).W
+	ADD.W	6(A1),D1		PNAME(2).W
+	BRA.S	BUILDHA7
+BUILDHA2	ADD.W	4(A1),D1		PNAM(0).W
+	ADD.W	6(A1),D1		PNAME(2).W
+	ADD.W	8(A1),D1		PNAME(4).W
+BUILDHA7	EQU	*
+*	DIVU	\#MAXBUCKET,D1	D1 <- (rem . quo)
+	DIVU	\#263,D1
+	SWAP	D1		D1 <- (quo . rem)
+	AND.L	\#$FFFF,D1 	pour ne garder que le rem
+BUILD1	LSL.W	\#2,D1		adresse de .L
+	LEA	HASHTAB,A2	adresse du debut de la table de hache
+	MOVE.L	(A2,D1.W),(A0)+	force le A-LINK
+	MOVE.L	D2,(A2,D1.W)	nouveau ALINK
+	MOVE.W	(A1)+,(A0)+	force le *TYPE
+	MOVE.W	(A1)+,D0		recup le PLEN
+	MOVE.W	D0,(A0)+		cre le PLEN de l'atome
+	BEQ.S	BUILD9		il est = 0 (symbole VOID)
+	SUBQ.W	\#1,D0		readjust l'intervalle
+	LSR.W	\#1,D0		compte de mots de 16 bits
+BUILD3	MOVE.W	(A1)+,(A0)+	cre le PNAME
+	DBRA	D0,BUILD3 	pour le nb de double mot idoine.
+BUILD9	MOVE.L	A0,CSYMB		sauve la derniere adresse.
+	JMP	(A1)		et on rentre facile.
+
+*
+*	Donnees pour la gestion des atomes
+*
+
+	SECTION	15
+
+	XREF	CSYMB
+
+	XDEF	BPHYS
+
+ZSYMB	DC.L	0	CSYMB temporaire
+ASYMB	DC.L	0	adresse du buffer a creer
+TSYMB	DC.L	0	taille de l'atome a creer
+YSYMB	DC.L	0	pointeur precedent pour le snap de l'oblist
+HSYMB	DC.L	0	adresse du bucket courant
+
+*	Chaine pour les impresions physiques
+
+BPHYS	DC.L	128	 max 512 car + size
+
+	END
+
+
+
